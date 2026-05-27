@@ -1,0 +1,67 @@
+package dev.thomasbuilds.spectre.settings
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+data class Settings(
+  val themeMode: ThemeMode = ThemeMode.SYSTEM,
+  val showStaleWifi: Boolean = true,
+  val showStaleBluetooth: Boolean = true
+) {
+  companion object {
+    val DEFAULTS = Settings()
+  }
+}
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "spectre_settings")
+
+class SettingsRepository(
+  context: Context
+) {
+  private val store = context.applicationContext.dataStore
+
+  val settings: Flow<Settings> =
+    store.data.map { prefs ->
+      val themeName = prefs[KEY_THEME] ?: ThemeMode.SYSTEM.name
+      Settings(
+        themeMode = runCatching { ThemeMode.valueOf(themeName) }.getOrDefault(ThemeMode.SYSTEM),
+        showStaleWifi = prefs[KEY_SHOW_STALE_WIFI] ?: true,
+        showStaleBluetooth = prefs[KEY_SHOW_STALE_BT] ?: true
+      )
+    }
+
+  suspend fun setThemeMode(mode: ThemeMode) {
+    store.edit { it[KEY_THEME] = mode.name }
+  }
+
+  suspend fun setShowStaleWifi(show: Boolean) {
+    store.edit { it[KEY_SHOW_STALE_WIFI] = show }
+  }
+
+  suspend fun setShowStaleBluetooth(show: Boolean) {
+    store.edit { it[KEY_SHOW_STALE_BT] = show }
+  }
+
+  suspend fun resetToDefaults() {
+    store.edit { prefs ->
+      prefs[KEY_THEME] = ThemeMode.SYSTEM.name
+      prefs[KEY_SHOW_STALE_WIFI] = true
+      prefs[KEY_SHOW_STALE_BT] = true
+    }
+  }
+
+  private companion object {
+    val KEY_THEME = stringPreferencesKey("theme_mode")
+    val KEY_SHOW_STALE_WIFI = booleanPreferencesKey("show_stale_wifi")
+    val KEY_SHOW_STALE_BT = booleanPreferencesKey("show_stale_bluetooth")
+  }
+}

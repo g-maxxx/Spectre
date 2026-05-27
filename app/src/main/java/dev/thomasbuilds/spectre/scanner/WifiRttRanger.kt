@@ -1,0 +1,130 @@
+package dev.thomasbuilds.spectre.scanner
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.wifi.ScanResult
+import android.net.wifi.rtt.RangingRequest
+import android.net.wifi.rtt.RangingResult
+import android.net.wifi.rtt.RangingResultCallback
+import android.net.wifi.rtt.WifiRttManager
+import android.util.Log
+import androidx.core.content.ContextCompat
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+
+class WifiRttRanger(
+  private val context: Context
+) {
+  data class FtmReading(
+    val distanceM: Double,
+    val stdDevM: Double,
+    val rssi: Int,
+    val timestampMs: Long
+  )
+
+  private val rttMgr: WifiRttManager? =
+    context.getSystemService(Context.WIFI_RTT_RANGING_SERVICE) as? WifiRttManager
+
+  private val cache = ConcurrentHashMap<String, FtmReading>()
+  private val executor =
+    Executors.newSingleThreadExecutor { r ->
+      Thread(r, "wifi-rtt").apply { isDaemon = true }
+    }
+  private val inFlight = AtomicBoolean(false)
+
+  fun isSupported(): Boolean =
+    rttMgr != null &&
+      context.packageManager.hasSystemFeature(PackageManager.FEATURE_WIFI_RTT)
+
+  private fun hasPermission(): Boolean =
+    ContextCompat.checkSelfPermission(
+      context,
+      Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+  fun fresh(
+    bssid: String?,
+    maxAgeMs: Long = MAX_AGE_MS
+  ): FtmReading? {
+    if (bssid.isNullOrEmpty()) return null
+    val r = cache[bssid.uppercase()] ?: return null
+    return if (System.currentTimeMillis() - r.timestampMs < maxAgeMs) r else null
+  }
+
+  @SuppressLint("MissingPermission")
+  fun requestRanging(scanResults: List<ScanResult>) {
+    if (!isSupported()) return
+    if (!hasPermission()) return
+    if (inFlight.get()) return
+    val mgr = rttMgr ?: return
+
+    val ftmCapable = scanResults.filter { it.is80211mcResponder }
+    if (ftmCapable.isEmpty()) return
+    val targets =
+      ftmCapable
+        .filter { sr ->
+          val mac = sr.BSSID
+          !mac.isNullOrEmpty() && fresh(mac, REREQUEST_THRESHOLD_MS) == null
+        }.take(RangingRequest.getMaxPeers())
+
+    if (targets.isEmpty()) return
+
+    val request =
+      try {
+        RangingRequest
+          .Builder()
+          .apply {
+            targets.forEach { addAccessPoint(it) }
+          }.build()
+      } catch (e: IllegalArgumentException) {
+        Log.w(TAG, "ranging request build failed: ${e.message}")
+        return
+      }
+
+    if (!inFlight.compareAndSet(false, true)) return
+    try {
+      mgr.startRanging(
+        request,
+        executor,
+        object : RangingResultCallback() {
+          override fun onRangingResults(results: List<RangingResult>) {
+            inFlight.set(false)
+            val now = System.currentTimeMillis()
+            results.forEach { r ->
+              val mac = r.macAddress?.toString()?.uppercase() ?: return@forEach
+              if (r.status == RangingResult.STATUS_SUCCESS) {
+                cache[mac] =
+                  FtmReading(
+                    distanceM = r.distanceMm / 1000.0,
+                    stdDevM = r.distanceStdDevMm / 1000.0,
+                    rssi = r.rssi,
+                    timestampMs = now
+                  )
+              }
+            }
+          }
+
+          override fun onRangingFailure(code: Int) {
+            inFlight.set(false)
+            Log.w(TAG, "FTM batch failed code=$code")
+          }
+        }
+      )
+    } catch (e: SecurityException) {
+      Log.w(TAG, "FTM start denied: ${e.message}")
+      inFlight.set(false)
+    } catch (e: Throwable) {
+      Log.w(TAG, "FTM start threw: ${e.message}")
+      inFlight.set(false)
+    }
+  }
+
+  private companion object {
+    const val TAG = "WifiRttRanger"
+    const val MAX_AGE_MS = 60_000L
+    const val REREQUEST_THRESHOLD_MS = 30_000L
+  }
+}

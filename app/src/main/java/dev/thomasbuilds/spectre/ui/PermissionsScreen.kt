@@ -1,0 +1,145 @@
+package dev.thomasbuilds.spectre.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.dp
+import dev.thomasbuilds.spectre.R
+
+@Composable
+fun PermissionsScreen(onContinue: () -> Unit) {
+  val insets = WindowInsets.safeDrawing.asPaddingValues()
+  Surface(
+    modifier = Modifier.fillMaxSize(),
+    color = MaterialTheme.colorScheme.background
+  ) {
+    Column(
+      modifier =
+        Modifier
+          .fillMaxSize()
+          .verticalScroll(rememberScrollState())
+          .padding(insets)
+          .padding(horizontal = 24.dp, vertical = 32.dp),
+      horizontalAlignment = Alignment.Start
+    ) {
+      Spacer(Modifier.height(32.dp))
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+          imageVector = ImageVector.vectorResource(R.drawable.ic_launcher_foreground),
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.size(96.dp)
+        )
+        Text(
+          "Spectre",
+          style = MaterialTheme.typography.displaySmall,
+          color = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.offset(x = (-14).dp)
+        )
+      }
+      Spacer(Modifier.height(8.dp))
+      Text(
+        "Passive RF environment monitor",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      Spacer(Modifier.height(36.dp))
+      Text(
+        "Spectre listens for signals broadcast at you and shows your live exposure. " +
+          "It is read-only. Spectre never transmits, never connects to networks, " +
+          "and has no network access of its own.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface
+      )
+      Spacer(Modifier.height(28.dp))
+      Text(
+        "Permissions",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      Spacer(Modifier.height(12.dp))
+      Row(
+        title = "Phone state",
+        desc = "Read visible cellular tower info: 5G, 4G, 3G, 2G."
+      )
+      Row(
+        title = "Precise location",
+        desc =
+          "Required by Android to enumerate WiFi access points, GNSS satellites, " +
+            "Bluetooth devices, and cellular cell IDs. Location data stays on your device."
+      )
+      Row(
+        title = "Bluetooth scan",
+        desc = "Discover BLE advertising devices nearby."
+      )
+      Row(
+        title = "Notifications",
+        desc = "Show the foreground monitor notification so scanning continues in the background."
+      )
+      Row(
+        title = "Local network (INTERNET)",
+        desc =
+          "Required by the Recon screen for host discovery + port scans + mDNS on the LAN " +
+            "you're connected to. Spectre never contacts the internet."
+      )
+      Spacer(Modifier.height(32.dp))
+      Text(
+        "No analytics. No Google services. No outbound internet traffic.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
+      Spacer(Modifier.height(36.dp))
+      Button(
+        onClick = onContinue,
+        modifier = Modifier.fillMaxWidth()
+      ) {
+        Text("Grant permissions")
+      }
+      Spacer(Modifier.height(24.dp))
+    }
+  }
+}
+
+@Composable
+private fun Row(
+  title: String,
+  desc: String
+) {
+  Column(
+    modifier = Modifier.padding(vertical = 10.dp),
+    verticalArrangement = Arrangement.spacedBy(2.dp)
+  ) {
+    Text(
+      title,
+      style = MaterialTheme.typography.titleMedium,
+      color = MaterialTheme.colorScheme.onSurface
+    )
+    Text(
+      desc,
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+  }
+}
