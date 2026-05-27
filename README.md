@@ -4,6 +4,53 @@
 
 # Spectre
 
-Radio frequency scanner with recon and offensive capabilities
+**Radio frequency scanner with recon and offensive capabilities**
 
 </div>
+
+Spectre shows the radio environment around you in one place: the cellular towers your phone can see, nearby WiFi access points, Bluetooth LE devices, and the GNSS satellites overhead. It also computes a single live "RF exposure" figure by power-summing everything it receives, all on-device.
+
+## How it works
+
+A bound foreground service hosts four independent scanners (cellular, WiFi, Bluetooth, GNSS). Each scanner wraps the relevant Android system APIs, keeps its own cache of what it has seen, and exposes a reactive stream of results. The service merges those four streams into a single immutable snapshot and recomputes the live exposure value whenever anything changes. The UI (Jetpack Compose) binds to the service and renders a dashboard: a central exposure gauge plus one card per source. Tapping a card expands a detailed, sortable, filterable list of everything that source has detected.
+
+Android gates all radio scanning behind the precise location permission, so Spectre needs it, with location switched on, before it can read anything at all. Scanning then keeps running through the foreground-service notification, so the dashboard stays current while the app is in the background; swipe the notification away to stop monitoring.
+
+**The exposure number.** Received signal strengths are reported in dBm, a logarithmic scale, so they cannot meaningfully be added together. Spectre converts each signal to linear power (milliwatts), sums them, and converts the total back to dBm. The result is dominated by the strongest emitters, which is the physically correct behavior for total received power. Cellular signals are normalized to a wideband-equivalent figure first, as explained below, so they are comparable to WiFi and Bluetooth.
+
+## Features
+
+- **Live RF exposure gauge.** A single number for the total received RF power across cellular, WiFi, and Bluetooth, colored by intensity.
+- **Cellular.** 5G, 4G, 3G, and 2G cells with operator, cell identifiers, bands, reference measurements (RSRP/RSRQ/SINR and the 3G/2G equivalents), and a timing-advance distance estimate where available. Dual-SIM aware.
+- **WiFi.** Access points across the 2.4, 5, and 6 GHz bands with security (WPA, WPA2, WPA3, OWE, WEP, Open), WPS and management-frame-protection state, channel and width, and a distance estimate. Live signal strength for the network you are connected to, and true ranging over 802.11mc FTM where the hardware supports it.
+- **Bluetooth LE.** Advertising devices with name, address, signal strength, address type, PHY, service UUIDs, and decoded manufacturer data (Apple, Google, Microsoft, and others), including iBeacon fields. A GATT inspector can connect to a device, enumerate its services and characteristics, read their values, and write to writable ones.
+- **GNSS.** Multi-constellation tracking (GPS, GLONASS, Galileo, BeiDou, QZSS, NavIC, SBAS) with dual-frequency support, carrier-to-noise, elevation and azimuth, used-in-fix status, and a computed sub-satellite ground point for each satellite.
+- **Local-network recon.** Host discovery through TCP-connect probes on common ports, with banner grabbing and reverse DNS, alongside mDNS / DNS-SD service discovery and SSDP / UPnP discovery, all limited to the LAN you are connected to.
+- **Active BLE tooling.** An iBeacon broadcaster with configurable UUID, major, minor, and measured power, plus the GATT read/write inspector above. These are intended for your own devices and authorized testing.
+
+## Android limitations, and how Spectre handles them
+
+Much of the work in Spectre goes into handling what Android does and does not let an ordinary app see.
+
+**Signal strength is a reference measurement, not total power.** Modems report RSRP (4G/5G) or RSCP (3G), the power of a single reference element, not the power of the whole channel. Spectre reconstructs a wideband estimate: LTE uses the modem's own RSSI when it exposes one, otherwise a bandwidth-derived offset; NR (5G) uses a fixed offset because Android does not expose the NR channel bandwidth at all; WCDMA derives it from Ec/No; GSM is already a total-power figure. The result is usually within a few dB of the true value.
+
+**5G NSA is invisible.** On most 5G networks the phone rides on a 4G anchor cell and adds a 5G carrier on top, and Android exposes only the 4G anchor to apps. The strength shown for a connected 5G NSA cell is therefore the anchor's, not the 5G signal carrying the data. Only standalone 5G (5G SA) returns a real 5G reading. This cannot be worked around, so it is disclosed clearly in the app.
+
+**Only your carrier's cells appear.** The modem decodes only the spectrum your SIM's network and its roaming partners use, so cells from other carriers never show up. Android's telephony APIs also report a single subscription by default, so Spectre monitors every active SIM to cover both carriers on a dual-SIM phone.
+
+**WiFi scan throttling.** Android limits an app to roughly four WiFi scans every two minutes. Spectre paces itself to about one scan every 30 seconds while throttling is on, and faster once it is disabled in Developer options. It also consumes the results of system-initiated scans, so the list keeps updating even when its own scans are throttled.
+
+**GNSS needs an active fix to stream.** The satellite-status callback only fires while the GNSS engine is running, so Spectre keeps a location request active to hold the engine on. That same fix anchors each satellite's sub-satellite ground point.
+
+**Distance is not handed to you.** Android gives no distance to most emitters. Spectre uses true ranging where it exists (WiFi 802.11mc FTM, cellular timing advance) and a calibrated path-loss model otherwise, drawing on the iBeacon measured-power field when present, and labels every estimate with its confidence so you know which is which.
+
+## Privacy
+
+No Google services, no Firebase, no Play dependencies (AndroidX only), and no analytics. The app makes no internet connections; the recon feature only ever talks to the local network, and only when you start it.
+
+## Sponsor
+
+Spectre is free and ad-free. Donations toward its continued development are very welcome.
+
+- Bitcoin: `bc1qphgd8leqsf06qlm6jjxpuw2rtq9f9hdjnhfluh`
+- Monero: `85fzziWM1pH77HWHNhE6aAN9uaHrLL7CMFA72rVecmMDR1fUjfv9YmS6GGeiV3hDEn7e9d8v4hfMSRmmEp171fpR4nipNfZ`
