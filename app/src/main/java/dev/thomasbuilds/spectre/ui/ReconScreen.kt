@@ -1,8 +1,5 @@
 package dev.thomasbuilds.spectre.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -75,7 +71,6 @@ fun ReconScreen(onBack: () -> Unit) {
 
   var subnet by remember { mutableStateOf<SubnetInfo?>(null) }
   var diagnostic by remember { mutableStateOf("") }
-  var networkDenied by remember { mutableStateOf(false) }
   val hostsFlow = remember { MutableStateFlow<List<HostInfo>>(emptyList()) }
   val mdnsFlow = remember { MutableStateFlow<List<MdnsService>>(emptyList()) }
   val hosts by hostsFlow.collectAsState()
@@ -91,7 +86,6 @@ fun ReconScreen(onBack: () -> Unit) {
       val info = withContext(Dispatchers.IO) { scanner.currentSubnet() }
       subnet = info
       diagnostic = scanner.lastDiagnostic
-      networkDenied = scanner.networkPermissionLikelyDenied
       if (info != null) break
       kotlinx.coroutines.delay(2_000)
     }
@@ -100,17 +94,7 @@ fun ReconScreen(onBack: () -> Unit) {
   val insets = WindowInsets.safeDrawing.asPaddingValues()
   Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
     Column(modifier = Modifier.fillMaxSize().padding(insets)) {
-      TopBar(
-        onBack = onBack,
-        onRefresh = {
-          scope.launch {
-            val info = withContext(Dispatchers.IO) { scanner.currentSubnet() }
-            subnet = info
-            diagnostic = scanner.lastDiagnostic
-            networkDenied = scanner.networkPermissionLikelyDenied
-          }
-        }
-      )
+      TopBar(onBack = onBack)
       Column(
         modifier =
           Modifier
@@ -119,19 +103,6 @@ fun ReconScreen(onBack: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp)
       ) {
         SubnetCard(subnet)
-        if (networkDenied) {
-          Spacer(Modifier.height(8.dp))
-          NetworkDeniedCard(onOpenSettings = {
-            runCatching {
-              context.startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                  data = Uri.fromParts("package", context.packageName, null)
-                  addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-              )
-            }
-          })
-        }
         if (localBlocked) {
           Spacer(Modifier.height(8.dp))
           LocalBlockedCard()
@@ -175,7 +146,7 @@ fun ReconScreen(onBack: () -> Unit) {
                     }
                   val ssdpJob =
                     launch {
-                      ssdpScanner.scan(scanner.preferredNetwork).collect { device ->
+                      ssdpScanner.scan().collect { device ->
                         hostsFlow.update { list ->
                           (list.filterNot { it.ip == device.ip } + mergeSsdp(list, device))
                             .sortedBy { ipToLong(it.ip) }
@@ -259,10 +230,7 @@ fun ReconScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun TopBar(
-  onBack: () -> Unit,
-  onRefresh: () -> Unit
-) {
+private fun TopBar(onBack: () -> Unit) {
   Row(
     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
     verticalAlignment = Alignment.CenterVertically
@@ -282,42 +250,6 @@ private fun TopBar(
       modifier = Modifier.weight(1f)
     )
     InfoButton(title = "Recon screen", body = dev.thomasbuilds.spectre.ui.HelpEntries.ReconScreen)
-    IconButton(onClick = onRefresh) {
-      Icon(
-        imageVector = Icons.Rounded.Refresh,
-        contentDescription = "Refresh subnet",
-        tint = MaterialTheme.colorScheme.onSurfaceVariant
-      )
-    }
-  }
-}
-
-@Composable
-private fun NetworkDeniedCard(onOpenSettings: () -> Unit) {
-  Card(
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(12.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-  ) {
-    Column(modifier = Modifier.padding(16.dp)) {
-      Text(
-        "Network permission denied",
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.error
-      )
-      Spacer(Modifier.height(6.dp))
-      Text(
-        "GrapheneOS is blocking Spectre from any network access, even local " +
-          "sockets, ConnectivityManager, and NetworkInterface enumeration. " +
-          "Tap below to open Spectre's app permissions and enable Network.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurface
-      )
-      Spacer(Modifier.height(12.dp))
-      Button(onClick = onOpenSettings) {
-        Text("Open app permissions")
-      }
-    }
   }
 }
 
@@ -462,13 +394,6 @@ private fun HostRow(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary
           )
-          if (host.rtMs > 0) {
-            Text(
-              "${host.rtMs} ms",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-          }
         }
       }
       if (!host.ssdpServer.isNullOrBlank()) {
@@ -614,7 +539,6 @@ private fun mergeSsdp(
     hostname = null,
     openPorts = emptyList(),
     banners = emptyMap(),
-    rtMs = 0L,
     ssdpServer = device.server,
     ssdpLocation = device.location
   )

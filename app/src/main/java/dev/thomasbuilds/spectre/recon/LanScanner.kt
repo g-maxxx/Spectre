@@ -1,8 +1,6 @@
 package dev.thomasbuilds.spectre.recon
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -16,13 +14,21 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
-import java.net.Socket
+import java.nio.ByteBuffer
+import java.nio.channels.AsynchronousSocketChannel
+import java.nio.channels.CompletionHandler
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 @Immutable
 data class SubnetInfo(
@@ -38,7 +44,6 @@ data class HostInfo(
   val hostname: String?,
   val openPorts: List<Int>,
   val banners: Map<Int, String> = emptyMap(),
-  val rtMs: Long,
   val ssdpServer: String? = null,
   val ssdpLocation: String? = null
 )
@@ -50,23 +55,15 @@ class LanScanner(
   @Volatile var lastDiagnostic: String = ""
     private set
 
-  @Volatile var preferredNetwork: Network? = null
-    private set
-
-  @Volatile var networkPermissionLikelyDenied: Boolean = false
-    private set
-
   @Volatile var localAccessBlocked: Boolean = false
     private set
+
+  // 1024 in-flight cap keeps the kernel out of ENOBUFS while saturating the wire.
+  private val probeGate = Semaphore(permits = 1024)
 
   private fun isVpnLikeInterface(name: String): Boolean {
     val lower = name.lowercase()
     return VPN_INTERFACE_PREFIXES.any { lower.startsWith(it) }
-  }
-
-  private fun probeNetworkPermission(): Boolean {
-    val ifaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull()
-    return ifaces != null
   }
 
   fun currentSubnet(): SubnetInfo? {
@@ -77,14 +74,6 @@ class LanScanner(
     }
 
     log("─── currentSubnet() probe ───")
-
-    val canEnumerate = probeNetworkPermission()
-    log("NetworkInterface.getNetworkInterfaces accessible: $canEnumerate")
-    val cspGranted =
-      context.checkSelfPermission(Manifest.permission.INTERNET) ==
-        PackageManager.PERMISSION_GRANTED
-    log("checkSelfPermission(INTERNET): ${if (cspGranted) "GRANTED" else "DENIED"} (informational)")
-    networkPermissionLikelyDenied = !canEnumerate
 
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     log("ConnectivityManager: ${cm != null}")
@@ -126,7 +115,6 @@ class LanScanner(
         else -> "(no network)"
       }
     log("picked network: $targetNet ($pickReason)")
-    preferredNetwork = targetNet
 
     if (cm != null && targetNet != null) {
       val lp = cm.getLinkProperties(targetNet)
@@ -235,20 +223,16 @@ class LanScanner(
   fun scanHosts(
     subnet: SubnetInfo,
     probePorts: List<Int> = DISCOVERY_PORTS,
-    timeoutMs: Int = 600,
-    concurrency: Int = 32
+    timeoutMs: Int = 1500
   ): Flow<HostInfo> =
     channelFlow {
       localAccessBlocked = false
       val ips = enumerateSubnet(subnet) ?: return@channelFlow
-      ips.chunked(concurrency).forEach { chunk ->
+      withContext(io) {
         coroutineScope {
-          chunk
-            .map { ip ->
-              async(io) { probeHost(ip, probePorts, timeoutMs) }
-            }.awaitAll()
-            .filterNotNull()
-            .forEach { send(it) }
+          ips.forEach { ip ->
+            launch { probeHost(ip, probePorts, timeoutMs)?.let { send(it) } }
+          }
         }
       }
     }
@@ -258,12 +242,11 @@ class LanScanner(
     ports: List<Int>,
     timeoutMs: Int
   ): HostInfo? {
-    val start = System.currentTimeMillis()
     val open =
       coroutineScope {
         ports
           .map { port ->
-            async(io) { if (tryConnect(ip, port, timeoutMs)) port else null }
+            async { if (tryConnect(ip, port, timeoutMs)) port else null }
           }.awaitAll()
           .filterNotNull()
       }
@@ -273,13 +256,12 @@ class LanScanner(
       coroutineScope {
         open
           .map { port ->
-            async(io) { port to grabBanner(ip, port, BANNER_TIMEOUT_MS) }
+            async { port to grabBanner(ip, port, BANNER_TIMEOUT_MS) }
           }.awaitAll()
           .mapNotNull { (p, b) -> b?.let { p to it } }
           .toMap()
       }
 
-    val rt = System.currentTimeMillis() - start
     val hostname =
       withTimeoutOrNull(RDNS_TIMEOUT_MS) {
         withContext(io) {
@@ -292,12 +274,11 @@ class LanScanner(
       ip = ip,
       hostname = hostname,
       openPorts = open.sorted(),
-      banners = banners,
-      rtMs = rt
+      banners = banners
     )
   }
 
-  private fun grabBanner(
+  private suspend fun grabBanner(
     host: String,
     port: Int,
     timeoutMs: Int
@@ -316,46 +297,98 @@ class LanScanner(
       ?.take(120)
   }
 
-  private fun readProbe(
+  private suspend fun readProbe(
     host: String,
     port: Int,
     timeoutMs: Int,
     payload: ByteArray?
-  ): String? =
-    runCatching {
-      bindToWifi(Socket()).use { socket ->
-        socket.connect(InetSocketAddress(host, port), timeoutMs)
-        socket.soTimeout = timeoutMs
+  ): String? = probeGate.withPermit {
+    val channel = AsynchronousSocketChannel.open()
+    try {
+      withTimeoutOrNull(timeoutMs.toLong()) {
+        connectAsync(channel, InetSocketAddress(host, port))
         if (payload != null) {
-          socket.getOutputStream().apply {
-            write(payload)
-            flush()
-          }
+          writeAsync(channel, ByteBuffer.wrap(payload))
         }
-        val buf = ByteArray(4096)
-        val read = socket.getInputStream().read(buf)
-        if (read <= 0) null else String(buf, 0, read, Charsets.ISO_8859_1)
+        val buf = ByteBuffer.allocate(4096)
+        val read = readAsync(channel, buf)
+        if (read <= 0) null else String(buf.array(), 0, read, Charsets.ISO_8859_1)
       }
-    }.onFailure { if (isPolicyBlock(it)) localAccessBlocked = true }.getOrNull()
+    } catch (e: Throwable) {
+      if (isPolicyBlock(e)) localAccessBlocked = true
+      null
+    } finally {
+      runCatching { channel.close() }
+    }
+  }
 
   private fun httpGet(host: String): ByteArray =
     "GET / HTTP/1.0\r\nHost: $host\r\nUser-Agent: Spectre-Recon\r\nConnection: close\r\n\r\n"
       .toByteArray(Charsets.US_ASCII)
 
-  private fun tryConnect(
+  private suspend fun tryConnect(
     host: String,
     port: Int,
     timeoutMs: Int
-  ): Boolean =
+  ): Boolean = probeGate.withPermit {
+    val channel = AsynchronousSocketChannel.open()
     try {
-      bindToWifi(Socket()).use {
-        it.connect(InetSocketAddress(host, port), timeoutMs)
+      withTimeoutOrNull(timeoutMs.toLong()) {
+        connectAsync(channel, InetSocketAddress(host, port))
         true
-      }
+      } ?: false
     } catch (e: Throwable) {
       if (isPolicyBlock(e)) localAccessBlocked = true
       false
+    } finally {
+      runCatching { channel.close() }
     }
+  }
+
+  private suspend fun connectAsync(
+    channel: AsynchronousSocketChannel,
+    addr: InetSocketAddress
+  ) = suspendCancellableCoroutine<Unit> { cont ->
+    channel.connect(
+      addr,
+      null,
+      object : CompletionHandler<Void?, Any?> {
+        override fun completed(result: Void?, attachment: Any?) = cont.resume(Unit)
+        override fun failed(exc: Throwable, attachment: Any?) = cont.resumeWithException(exc)
+      }
+    )
+    cont.invokeOnCancellation { runCatching { channel.close() } }
+  }
+
+  private suspend fun writeAsync(
+    channel: AsynchronousSocketChannel,
+    buf: ByteBuffer
+  ): Int = suspendCancellableCoroutine { cont ->
+    channel.write(
+      buf,
+      null,
+      object : CompletionHandler<Int, Any?> {
+        override fun completed(result: Int, attachment: Any?) = cont.resume(result)
+        override fun failed(exc: Throwable, attachment: Any?) = cont.resumeWithException(exc)
+      }
+    )
+    cont.invokeOnCancellation { runCatching { channel.close() } }
+  }
+
+  private suspend fun readAsync(
+    channel: AsynchronousSocketChannel,
+    buf: ByteBuffer
+  ): Int = suspendCancellableCoroutine { cont ->
+    channel.read(
+      buf,
+      null,
+      object : CompletionHandler<Int, Any?> {
+        override fun completed(result: Int, attachment: Any?) = cont.resume(result)
+        override fun failed(exc: Throwable, attachment: Any?) = cont.resumeWithException(exc)
+      }
+    )
+    cont.invokeOnCancellation { runCatching { channel.close() } }
+  }
 
   private fun isPolicyBlock(error: Throwable): Boolean {
     var cause: Throwable? = error
@@ -366,14 +399,6 @@ class LanScanner(
       cause = cause.cause
     }
     return false
-  }
-
-  // Bind probe sockets to the chosen Wi-Fi/Ethernet network so recon stays on that LAN and
-  // never escapes over cellular or a VPN.
-  private fun bindToWifi(socket: Socket): Socket {
-    val net = preferredNetwork ?: return socket
-    runCatching { net.bindSocket(socket) }
-    return socket
   }
 
   private fun enumerateSubnet(subnet: SubnetInfo): List<String>? {
@@ -399,7 +424,7 @@ class LanScanner(
     private val VPN_INTERFACE_PREFIXES =
       listOf("tun", "tap", "ppp", "wireguard", "wg", "ipsec", "nordlynx")
 
-    private const val BANNER_TIMEOUT_MS = 600
+    private const val BANNER_TIMEOUT_MS = 1500
     private const val RDNS_TIMEOUT_MS = 500L
 
     private val HTTP_PROBE_PORTS = setOf(80, 631, 5000, 8000, 8008, 8080, 8443, 9100, 32400)

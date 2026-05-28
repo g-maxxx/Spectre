@@ -1,6 +1,5 @@
 package dev.thomasbuilds.spectre.recon
 
-import android.net.Network
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -25,10 +24,7 @@ data class SsdpDevice(
 class SsdpDiscovery(
   private val io: CoroutineDispatcher = Dispatchers.IO
 ) {
-  fun scan(
-    preferredNetwork: Network? = null,
-    timeoutMs: Int = 4_000
-  ): Flow<SsdpDevice> =
+  fun scan(timeoutMs: Int = 4_000): Flow<SsdpDevice> =
     channelFlow {
       withContext(io) {
         val socket =
@@ -36,7 +32,6 @@ class SsdpDiscovery(
             soTimeout = 250
             reuseAddress = true
           }
-        runCatching { preferredNetwork?.bindSocket(socket) }
 
         try {
           listOf("upnp:rootdevice", "ssdp:all").forEach { st ->
