@@ -77,7 +77,7 @@ class BluetoothScanner(
     val seenConnectable: Boolean,
     val seenNonConnectable: Boolean,
     val isConnectable: Boolean,
-    val isConnected: Boolean,
+    val isBonded: Boolean,
     val sampleCount: Int,
     val isStale: Boolean
   )
@@ -200,7 +200,7 @@ class BluetoothScanner(
 
   private fun buildSignal(
     state: DeviceState,
-    isConnected: Boolean,
+    isBonded: Boolean,
     isStale: Boolean
   ): BluetoothSignal {
     val result = state.latestResult
@@ -304,7 +304,7 @@ class BluetoothScanner(
       rssi = rssi,
       distanceMeters = distance,
       distanceConfidence = confidence,
-      isConnected = isConnected,
+      isBonded = isBonded,
       details = details,
       advertisementHex = result.scanRecord?.let { advertisementHexBlock(it) },
       firstSeenMs = state.firstSeenMs,
@@ -443,7 +443,7 @@ class BluetoothScanner(
     }
     enforceSizeCap()
     val now = System.currentTimeMillis()
-    val connected = activelyConnectedMacs()
+    val bonded = bondedMacs()
     val signals =
       if (status != ScannerStatus.OK) {
         emptyList()
@@ -457,7 +457,7 @@ class BluetoothScanner(
               seenConnectable = dev.seenConnectable,
               seenNonConnectable = dev.seenNonConnectable,
               isConnectable = dev.latestResult.isConnectable,
-              isConnected = dev.mac in connected,
+              isBonded = dev.mac in bonded,
               sampleCount = dev.sampleCount.coerceAtMost(MIN_SAMPLES_FOR_DISTANCE),
               isStale = isStale
             )
@@ -465,7 +465,7 @@ class BluetoothScanner(
           if (cached != null && cached.key == key) {
             cached.signal
           } else {
-            val s = buildSignal(dev, isConnected = dev.mac in connected, isStale = isStale)
+            val s = buildSignal(dev, isBonded = dev.mac in bonded, isStale = isStale)
             signalCache[dev.mac] = CachedSignal(key, s)
             s
           }
@@ -483,7 +483,7 @@ class BluetoothScanner(
   }
 
   @SuppressLint("MissingPermission")
-  private fun activelyConnectedMacs(): Set<String> {
+  private fun bondedMacs(): Set<String> {
     if (!hasPermission()) return emptySet()
     val bonded = runCatching { adapter?.bondedDevices }.getOrNull().orEmpty()
     return bonded.mapNotNull { it.address }.toSet()

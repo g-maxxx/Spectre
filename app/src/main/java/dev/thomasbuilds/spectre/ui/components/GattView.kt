@@ -220,8 +220,8 @@ private fun BtHeader(b: BluetoothSignal) {
       horizontalArrangement = Arrangement.spacedBy(4.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
-      if (b.isConnectable && !b.isConnected) ConnectableTag()
-      if (b.isConnected) PairedChip()
+      if (b.isConnectable && !b.isBonded) ConnectableTag()
+      if (b.isBonded) PairedChip()
     }
   }
 }

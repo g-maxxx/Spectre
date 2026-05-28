@@ -90,7 +90,7 @@ data class BluetoothSignal(
   val rssi: Int,
   val distanceMeters: Double?,
   val distanceConfidence: DistanceConfidence,
-  val isConnected: Boolean = false,
+  val isBonded: Boolean = false,
   val details: List<DetailEntry> = emptyList(),
   val advertisementHex: String? = null,
   val firstSeenMs: Long = 0L,
