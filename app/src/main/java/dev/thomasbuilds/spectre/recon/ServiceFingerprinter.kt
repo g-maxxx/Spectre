@@ -49,11 +49,9 @@ object ServiceFingerprinter {
       Sig("imap", Regex("(?i)^\\* OK[^\\r\\n]*imap")),
       Sig("mariadb", Regex("\\x0a(\\d+\\.\\d+\\.\\d+[\\w.-]*-MariaDB[\\w.-]*)\\x00"), 1),
       Sig("mysql", Regex("\\x0a(\\d+\\.\\d+\\.\\d+[\\w.-]*)\\x00"), 1),
-      Sig("redis", Regex("(?i)redis_version:([\\w.]+)"), 1),
       Sig("redis", Regex("^(?:-NOAUTH|-ERR|\\+PONG)")),
       Sig("rtsp", Regex("^RTSP/1\\.0")),
       Sig("vnc", Regex("^RFB (\\d{3}\\.\\d{3})"), 1),
-      Sig("telnet", Regex("^\\xFF[\\xFB-\\xFE]")),
-      Sig("mqtt", Regex("^\\x20\\x02"))
+      Sig("telnet", Regex("^\\xFF[\\xFB-\\xFE]"))
     )
 }
