@@ -56,8 +56,6 @@ class CellularScanner(
   private val locationManager: LocationManager? =
     context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
-  @Volatile var staleTtlMs: Long = 60_000L
-
   @Volatile private var lastDisplayInfo: TelephonyDisplayInfo? = null
 
   private val _state = MutableStateFlow(CellularSourceState())
@@ -352,7 +350,7 @@ class CellularScanner(
     }
     val expired =
       cellSeenAt.entries
-        .filter { now - it.value > staleTtlMs }
+        .filter { now - it.value > STALE_TTL_MS }
         .map { it.key }
     expired.forEach {
       cellCache.remove(it)
@@ -600,6 +598,8 @@ class CellularScanner(
 
   private companion object {
     const val TAG = "CellularScanner"
+
+    const val STALE_TTL_MS = 60_000L
 
     const val MIN_PLAUSIBLE_DBM = -150
     const val MAX_PLAUSIBLE_DBM = 0

@@ -42,8 +42,6 @@ class WifiScanner(
     context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
   private val rttRanger = WifiRttRanger(context)
 
-  @Volatile var staleTtlMs: Long = 180_000L
-
   private val _state = MutableStateFlow(WifiSourceState())
   val state: StateFlow<WifiSourceState> = _state.asStateFlow()
 
@@ -209,7 +207,7 @@ class WifiScanner(
             it.value.signal.bssid
               .ifEmpty { it.value.signal.ssid }
           }.map { (key, state) ->
-            val isStale = now - state.lastSeenMs > staleTtlMs
+            val isStale = now - state.lastSeenMs > STALE_TTL_MS
             val base =
               if (state.signal.isStale == isStale) {
                 state.signal
@@ -459,6 +457,7 @@ class WifiScanner(
   private companion object {
     const val EMA_ALPHA = 0.3
     const val MIN_SAMPLES_FOR_DISTANCE = 2
+    const val STALE_TTL_MS = 180_000L
     const val WIFI_PROBE_INTERVAL_UNTHROTTLED_MS = 5_000L
 
     const val WIFI_PROBE_INTERVAL_THROTTLED_MS = 31_000L
