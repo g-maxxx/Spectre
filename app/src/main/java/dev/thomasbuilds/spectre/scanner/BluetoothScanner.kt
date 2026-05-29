@@ -12,7 +12,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.os.Build
-import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.util.isNotEmpty
@@ -294,15 +293,6 @@ class BluetoothScanner(
           ?.advertiseFlags
           ?.takeIf { it >= 0 }
           ?.let { add(DetailEntry("Adv flags", "0x%02X".format(it))) }
-        val ageNs = result.timestampNanos
-        if (ageNs > 0) {
-          // timestampNanos is on the elapsed-realtime (boot) clock, so it must be compared
-          // against elapsedRealtimeNanos(), not System.nanoTime().
-          val secondsAgo = (SystemClock.elapsedRealtimeNanos() - ageNs) / 1_000_000_000.0
-          if (secondsAgo in 0.0..600.0) {
-            add(DetailEntry("Last seen", "${"%.1f".format(secondsAgo)} s ago"))
-          }
-        }
       }
 
     return BluetoothSignal(
