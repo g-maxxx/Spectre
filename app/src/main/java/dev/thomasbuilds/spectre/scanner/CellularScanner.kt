@@ -175,7 +175,16 @@ class CellularScanner(
         scope.launch {
           while (isActive) {
             delay(CELL_HEARTBEAT_MS)
-            if (status() == ScannerStatus.OK) requestCellInfoRefresh()
+            if (status() == ScannerStatus.OK) {
+              // Recover if the first sync registered no subscriptions (e.g. the SIM was not yet
+              // readable right after the permission grant). start() runs only once, so without this
+              // the card stays at zero until the service is recreated.
+              if (subMonitors.isEmpty()) {
+                syncSubscriptions()
+                registerSubscriptionChangeListener()
+              }
+              requestCellInfoRefresh()
+            }
             publishNow()
           }
         }
@@ -198,6 +207,7 @@ class CellularScanner(
     subMonitors.clear()
   }
 
+  @Synchronized
   @SuppressLint("MissingPermission")
   private fun registerSubscriptionChangeListener() {
     if (subsChangeListener != null) return
