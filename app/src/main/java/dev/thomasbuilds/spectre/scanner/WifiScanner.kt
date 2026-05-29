@@ -30,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 class WifiScanner(
   private val context: Context
@@ -50,11 +51,13 @@ class WifiScanner(
     val smoothedRssi: Double,
     val sampleCount: Int,
     val firstSeenMs: Long,
-    val lastSeenMs: Long,
+    val lastSeenScan: Int,
     val lastScanTimestampMicros: Long
   )
 
   private val apCache = ConcurrentHashMap<String, ApState>()
+
+  private val scanGeneration = AtomicInteger(0)
 
   @Volatile private var liveConnectedRssi: Int? = null
 
@@ -187,7 +190,7 @@ class WifiScanner(
     val overflow = apCache.size - MAX_TRACKED_APS
     if (overflow <= 0) return
     apCache.entries
-      .sortedBy { it.value.lastSeenMs }
+      .sortedBy { it.value.lastSeenScan }
       .take(overflow)
       .forEach { apCache.remove(it.key) }
   }
@@ -196,6 +199,7 @@ class WifiScanner(
     val status = status()
     enforceSizeCap()
     val now = System.currentTimeMillis()
+    val generation = scanGeneration.get()
     val signals =
       if (status != ScannerStatus.OK) {
         emptyList()
@@ -207,7 +211,7 @@ class WifiScanner(
             it.value.signal.bssid
               .ifEmpty { it.value.signal.ssid }
           }.map { (key, state) ->
-            val isStale = now - state.lastSeenMs > STALE_TTL_MS
+            val isStale = generation - state.lastSeenScan >= STALE_SCAN_MISSES
             val base =
               if (state.signal.isStale == isStale) {
                 state.signal
@@ -263,6 +267,7 @@ class WifiScanner(
         .getOrDefault(emptyList())
     val connectedBssid = currentConnectedBssid(w)
     val now = System.currentTimeMillis()
+    val generation = scanGeneration.incrementAndGet()
 
     results.forEach { sr ->
       val key = (sr.BSSID ?: "").ifEmpty { sr.wifiSsid?.toString().orEmpty() }
@@ -297,7 +302,7 @@ class WifiScanner(
           smoothedRssi = smoothedRssi,
           sampleCount = sampleCount,
           firstSeenMs = firstSeenMs,
-          lastSeenMs = now,
+          lastSeenScan = generation,
           lastScanTimestampMicros = tsMicros
         )
     }
@@ -375,9 +380,7 @@ class WifiScanner(
       ssid = ssid,
       bssid = sr.BSSID ?: "",
       rssi = sanitizedRssi,
-      frequencyMhz = freq,
       band = band,
-      channelWidthMhz = width,
       distanceMeters = distance,
       distanceConfidence = confidence,
       isConnected = isConnected,
@@ -457,7 +460,7 @@ class WifiScanner(
   private companion object {
     const val EMA_ALPHA = 0.3
     const val MIN_SAMPLES_FOR_DISTANCE = 2
-    const val STALE_TTL_MS = 180_000L
+    const val STALE_SCAN_MISSES = 3
     const val WIFI_PROBE_INTERVAL_UNTHROTTLED_MS = 5_000L
 
     const val WIFI_PROBE_INTERVAL_THROTTLED_MS = 31_000L
