@@ -151,8 +151,6 @@ class GnssScanner(
               svid = bestBand.svid,
               cn0DbHz = bestBand.cn0DbHz,
               elevationDeg = bestBand.elevationDeg,
-              azimuthDeg = bestBand.azimuthDeg,
-              usedInFix = usedAnyBand,
               details = details
             )
           }

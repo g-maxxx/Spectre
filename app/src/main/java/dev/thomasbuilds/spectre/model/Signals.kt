@@ -26,8 +26,7 @@ enum class CellNetworkType(
   NR_5G("5G"),
   LTE_4G("4G"),
   WCDMA_3G("3G"),
-  GSM_2G("2G"),
-  UNKNOWN("?")
+  GSM_2G("2G")
 }
 
 @Immutable
@@ -70,9 +69,7 @@ data class WifiSignal(
   val ssid: String,
   val bssid: String,
   val rssi: Int,
-  val frequencyMhz: Int,
   val band: WifiBand,
-  val channelWidthMhz: Int,
   val distanceMeters: Double?,
   val distanceConfidence: DistanceConfidence,
   val isConnected: Boolean = false,
@@ -118,7 +115,5 @@ data class GnssSignal(
   val svid: Int,
   val cn0DbHz: Float,
   val elevationDeg: Float,
-  val azimuthDeg: Float,
-  val usedInFix: Boolean,
   val details: List<DetailEntry> = emptyList()
 )
