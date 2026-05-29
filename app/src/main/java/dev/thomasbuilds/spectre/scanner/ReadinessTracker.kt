@@ -7,6 +7,7 @@ internal class ReadinessTracker(
   private var okSinceMs: Long = 0L
   private var lastDataMs: Long = 0L
 
+  @Synchronized
   fun compute(
     statusOk: Boolean,
     hasData: Boolean,
