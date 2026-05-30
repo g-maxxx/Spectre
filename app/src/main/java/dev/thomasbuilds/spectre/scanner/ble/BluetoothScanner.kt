@@ -1,4 +1,4 @@
-package dev.thomasbuilds.spectre.scanner
+package dev.thomasbuilds.spectre.scanner.ble
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -22,12 +22,7 @@ import dev.thomasbuilds.spectre.model.BluetoothSourceState
 import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.DistanceConfidence
 import dev.thomasbuilds.spectre.model.ScannerStatus
-import dev.thomasbuilds.spectre.scanner.ble.advertisementHexBlock
-import dev.thomasbuilds.spectre.scanner.ble.appleAdvLabel
-import dev.thomasbuilds.spectre.scanner.ble.companyName
-import dev.thomasbuilds.spectre.scanner.ble.msAdvLabel
-import dev.thomasbuilds.spectre.scanner.ble.parseIbeaconMeasuredPower
-import dev.thomasbuilds.spectre.scanner.ble.shortenUuid
+import dev.thomasbuilds.spectre.scanner.ReadinessTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -267,7 +262,7 @@ class BluetoothScanner(
         result.scanRecord?.manufacturerSpecificData?.let { msd ->
           if (msd.isNotEmpty()) {
             val companies =
-              (0 until msd.size).joinToString { idx ->
+              (0..<msd.size).joinToString { idx ->
                 val cid = msd.keyAt(idx)
                 companyName(cid) ?: "0x%04X".format(cid)
               }

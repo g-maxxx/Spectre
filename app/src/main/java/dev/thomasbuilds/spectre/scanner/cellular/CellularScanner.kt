@@ -1,4 +1,4 @@
-package dev.thomasbuilds.spectre.scanner
+package dev.thomasbuilds.spectre.scanner.cellular
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -31,6 +31,7 @@ import dev.thomasbuilds.spectre.model.CellularSourceState
 import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.DistanceConfidence
 import dev.thomasbuilds.spectre.model.ScannerStatus
+import dev.thomasbuilds.spectre.scanner.ReadinessTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

@@ -49,6 +49,7 @@ import dev.thomasbuilds.spectre.recon.HostInfo
 import dev.thomasbuilds.spectre.recon.LanScanner
 import dev.thomasbuilds.spectre.recon.MdnsBrowser
 import dev.thomasbuilds.spectre.recon.MdnsService
+import dev.thomasbuilds.spectre.recon.ReconMerge
 import dev.thomasbuilds.spectre.recon.SsdpDiscovery
 import dev.thomasbuilds.spectre.recon.SubnetInfo
 import dev.thomasbuilds.spectre.ui.components.InfoButton
@@ -133,8 +134,8 @@ fun ReconScreen(onBack: () -> Unit) {
                     launch {
                       scanner.scanHosts(net).collect { host ->
                         hostsFlow.update { list ->
-                          (list.filterNot { it.ip == host.ip } + mergeHost(list, host))
-                            .sortedBy { ipToLong(it.ip) }
+                          (list.filterNot { it.ip == host.ip } + ReconMerge.mergeHost(list, host))
+                            .sortedBy { ReconMerge.ipToLong(it.ip) }
                         }
                       }
                     }
@@ -148,8 +149,8 @@ fun ReconScreen(onBack: () -> Unit) {
                     launch {
                       ssdpScanner.scan().collect { device ->
                         hostsFlow.update { list ->
-                          (list.filterNot { it.ip == device.ip } + mergeSsdp(list, device))
-                            .sortedBy { ipToLong(it.ip) }
+                          (list.filterNot { it.ip == device.ip } + ReconMerge.mergeSsdp(list, device))
+                            .sortedBy { ReconMerge.ipToLong(it.ip) }
                         }
                       }
                     }
@@ -458,7 +459,7 @@ private fun MdnsGroup(
   ) {
     Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
       Text(
-        shortType(type),
+        ReconMerge.shortType(type),
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary
       )
@@ -513,40 +514,3 @@ private fun InfoRow(
     )
   }
 }
-
-private fun mergeHost(
-  list: List<HostInfo>,
-  fresh: HostInfo
-): HostInfo {
-  val existing = list.firstOrNull { it.ip == fresh.ip } ?: return fresh
-  return fresh.copy(
-    ssdpServer = fresh.ssdpServer ?: existing.ssdpServer,
-    ssdpLocation = fresh.ssdpLocation ?: existing.ssdpLocation
-  )
-}
-
-private fun mergeSsdp(
-  list: List<HostInfo>,
-  device: dev.thomasbuilds.spectre.recon.SsdpDevice
-): HostInfo {
-  val existing = list.firstOrNull { it.ip == device.ip }
-  return existing?.copy(
-    ssdpServer = device.server ?: existing.ssdpServer,
-    ssdpLocation = device.location ?: existing.ssdpLocation
-  ) ?: HostInfo(
-    ip = device.ip,
-    hostname = null,
-    openPorts = emptyList(),
-    banners = emptyMap(),
-    ssdpServer = device.server,
-    ssdpLocation = device.location
-  )
-}
-
-private fun ipToLong(ip: String): Long {
-  val parts = ip.split(".").mapNotNull { it.toIntOrNull() }
-  if (parts.size != 4) return 0
-  return parts.fold(0L) { acc, b -> (acc shl 8) or b.toLong() }
-}
-
-private fun shortType(type: String): String = type.removeSuffix(".local.").removeSuffix(".")

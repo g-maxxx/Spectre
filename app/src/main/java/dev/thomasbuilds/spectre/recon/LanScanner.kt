@@ -426,25 +426,6 @@ class LanScanner(
     return false
   }
 
-  private fun enumerateSubnet(subnet: SubnetInfo): List<String>? {
-    if (subnet.prefixLength !in 22..30) return null
-    val parts = subnet.localIp.split(".").mapNotNull { it.toIntOrNull() }
-    if (parts.size != 4) return null
-    val ipInt = (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
-    val maskInt = if (subnet.prefixLength == 0) 0 else (-1 shl (32 - subnet.prefixLength))
-    val network = ipInt and maskInt
-    val broadcast = network or maskInt.inv()
-    val firstHost = (network + 1).toLong() and 0xFFFFFFFFL
-    val lastHost = (broadcast - 1).toLong() and 0xFFFFFFFFL
-    return (firstHost..lastHost).map { addr ->
-      val a = (addr shr 24) and 0xFF
-      val b = (addr shr 16) and 0xFF
-      val c = (addr shr 8) and 0xFF
-      val d = addr and 0xFF
-      "$a.$b.$c.$d"
-    }
-  }
-
   companion object {
     private val VPN_INTERFACE_PREFIXES =
       listOf("tun", "tap", "ppp", "wireguard", "wg", "ipsec", "nordlynx")
@@ -458,6 +439,25 @@ class LanScanner(
 
     val DISCOVERY_PORTS =
       listOf(22, 53, 80, 139, 443, 445, 515, 548, 554, 631, 1900, 2049, 3389, 5000, 5353, 5900, 8000, 8008, 8080, 8443, 9100, 32400)
+
+    fun enumerateSubnet(subnet: SubnetInfo): List<String>? {
+      if (subnet.prefixLength !in 22..30) return null
+      val parts = subnet.localIp.split(".").mapNotNull { it.toIntOrNull() }
+      if (parts.size != 4) return null
+      val ipInt = (parts[0] shl 24) or (parts[1] shl 16) or (parts[2] shl 8) or parts[3]
+      val maskInt = if (subnet.prefixLength == 0) 0 else (-1 shl (32 - subnet.prefixLength))
+      val network = ipInt and maskInt
+      val broadcast = network or maskInt.inv()
+      val firstHost = (network + 1).toLong() and 0xFFFFFFFFL
+      val lastHost = (broadcast - 1).toLong() and 0xFFFFFFFFL
+      return (firstHost..lastHost).map { addr ->
+        val a = (addr shr 24) and 0xFF
+        val b = (addr shr 16) and 0xFF
+        val c = (addr shr 8) and 0xFF
+        val d = addr and 0xFF
+        "$a.$b.$c.$d"
+      }
+    }
 
     fun labelForPort(port: Int): String =
       when (port) {

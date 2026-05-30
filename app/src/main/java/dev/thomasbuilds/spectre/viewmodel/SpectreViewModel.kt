@@ -12,9 +12,9 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.thomasbuilds.spectre.model.ScanState
 import dev.thomasbuilds.spectre.model.ScannerStatus
 import dev.thomasbuilds.spectre.service.RFMonitorService
-import dev.thomasbuilds.spectre.service.ScanState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow

@@ -42,8 +42,8 @@ import dev.thomasbuilds.spectre.model.CellSignal
 import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.DistanceConfidence
 import dev.thomasbuilds.spectre.model.GnssSignal
+import dev.thomasbuilds.spectre.model.ScanState
 import dev.thomasbuilds.spectre.model.WifiSignal
-import dev.thomasbuilds.spectre.service.ScanState
 import dev.thomasbuilds.spectre.ui.SignalSource
 
 private fun titleFor(source: SignalSource): String =

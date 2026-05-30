@@ -6,7 +6,7 @@ import androidx.core.util.size
 internal fun advertisementHexBlock(scanRecord: ScanRecord): String? {
   val lines = mutableListOf<String>()
   scanRecord.manufacturerSpecificData?.let { msd ->
-    for (i in 0 until msd.size) {
+    for (i in 0..<msd.size) {
       val cid = msd.keyAt(i)
       val bytes = msd.valueAt(i) ?: continue
       if (bytes.isEmpty()) continue

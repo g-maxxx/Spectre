@@ -1,4 +1,4 @@
-package dev.thomasbuilds.spectre.scanner
+package dev.thomasbuilds.spectre.scanner.wifi
 
 import android.Manifest
 import android.annotation.SuppressLint

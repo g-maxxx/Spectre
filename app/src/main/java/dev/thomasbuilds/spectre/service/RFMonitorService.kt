@@ -25,10 +25,11 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import dev.thomasbuilds.spectre.MainActivity
 import dev.thomasbuilds.spectre.R
 import dev.thomasbuilds.spectre.analysis.ExposureCalculator
-import dev.thomasbuilds.spectre.scanner.BluetoothScanner
-import dev.thomasbuilds.spectre.scanner.CellularScanner
-import dev.thomasbuilds.spectre.scanner.GnssScanner
-import dev.thomasbuilds.spectre.scanner.WifiScanner
+import dev.thomasbuilds.spectre.model.ScanState
+import dev.thomasbuilds.spectre.scanner.ble.BluetoothScanner
+import dev.thomasbuilds.spectre.scanner.cellular.CellularScanner
+import dev.thomasbuilds.spectre.scanner.gnss.GnssScanner
+import dev.thomasbuilds.spectre.scanner.wifi.WifiScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview

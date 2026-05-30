@@ -1,11 +1,6 @@
-package dev.thomasbuilds.spectre.service
+package dev.thomasbuilds.spectre.model
 
 import androidx.compose.runtime.Immutable
-import dev.thomasbuilds.spectre.model.BluetoothSignal
-import dev.thomasbuilds.spectre.model.CellSignal
-import dev.thomasbuilds.spectre.model.GnssSignal
-import dev.thomasbuilds.spectre.model.ScannerStatus
-import dev.thomasbuilds.spectre.model.WifiSignal
 
 @Immutable
 data class ScanState(

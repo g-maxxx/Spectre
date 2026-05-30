@@ -1,4 +1,4 @@
-package dev.thomasbuilds.spectre.scanner
+package dev.thomasbuilds.spectre.scanner.wifi
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -16,10 +16,9 @@ import dev.thomasbuilds.spectre.analysis.Distance
 import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.DistanceConfidence
 import dev.thomasbuilds.spectre.model.ScannerStatus
-import dev.thomasbuilds.spectre.model.WifiBand
-import dev.thomasbuilds.spectre.model.WifiSecurity
 import dev.thomasbuilds.spectre.model.WifiSignal
 import dev.thomasbuilds.spectre.model.WifiSourceState
+import dev.thomasbuilds.spectre.scanner.ReadinessTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -333,21 +332,16 @@ class WifiScanner(
     firstSeenMs: Long
   ): WifiSignal {
     val freq = sr.frequency
-    val band =
-      when {
-        freq < 3000 -> WifiBand.GHZ_2_4
-        freq < 5950 -> WifiBand.GHZ_5
-        else -> WifiBand.GHZ_6
-      }
+    val band = WifiChannels.bandFor(freq)
     val rawSsid =
       sr.wifiSsid
         ?.toString()
         ?.trim('"')
         .orEmpty()
     val ssid = if (rawSsid.isBlank()) "Hidden" else rawSsid
-    val width = channelWidthMhz(sr.channelWidth)
-    val channel = channelNumber(freq)
-    val securityLabel = parseSecurity(sr.capabilities)
+    val width = WifiChannels.widthMhz(sr.channelWidth)
+    val channel = WifiChannels.channelNumber(freq)
+    val securityLabel = WifiCapabilities.securityLabel(sr.capabilities)
 
     val (distance, confidence) =
       if (sampleCount < MIN_SAMPLES_FOR_DISTANCE) {
@@ -370,9 +364,9 @@ class WifiScanner(
           add(DetailEntry("Center 1", "${sr.centerFreq1} MHz"))
         }
         add(DetailEntry("Security", securityLabel))
-        securityRisk(sr.capabilities)?.let { add(DetailEntry("⚠ Risk", it)) }
-        add(DetailEntry("WPS", hasWps(sr.capabilities).toString()))
-        add(DetailEntry("MFP (802.11w)", mfpStatus(sr.capabilities)))
+        WifiCapabilities.securityRisk(sr.capabilities)?.let { add(DetailEntry("⚠ Risk", it)) }
+        add(DetailEntry("WPS", WifiCapabilities.hasWps(sr.capabilities).toString()))
+        add(DetailEntry("MFP (802.11w)", WifiCapabilities.mfpStatus(sr.capabilities)))
         add(DetailEntry("802.11mc FTM", sr.is80211mcResponder.toString()))
         if (sr.isPasspointNetwork) add(DetailEntry("Passpoint", "true"))
       }
@@ -386,69 +380,9 @@ class WifiScanner(
       isConnected = isConnected,
       details = details,
       firstSeenMs = firstSeenMs,
-      securityTypes = parseSecurityTypes(sr.capabilities),
-      hasWps = hasWps(sr.capabilities)
+      securityTypes = WifiCapabilities.parseSecurityTypes(sr.capabilities),
+      hasWps = WifiCapabilities.hasWps(sr.capabilities)
     )
-  }
-
-  private fun channelWidthMhz(channelWidthConst: Int): Int =
-    when (channelWidthConst) {
-      ScanResult.CHANNEL_WIDTH_20MHZ -> 20
-      ScanResult.CHANNEL_WIDTH_40MHZ -> 40
-      ScanResult.CHANNEL_WIDTH_80MHZ -> 80
-      ScanResult.CHANNEL_WIDTH_160MHZ -> 160
-      ScanResult.CHANNEL_WIDTH_80MHZ_PLUS_MHZ -> 160
-      else -> 20
-    }
-
-  private fun channelNumber(freqMhz: Int): Int? =
-    when {
-      freqMhz in 2412..2472 -> (freqMhz - 2407) / 5
-      freqMhz == 2484 -> 14
-      freqMhz in 5160..5885 -> (freqMhz - 5000) / 5
-      freqMhz in 5955..7115 -> (freqMhz - 5950) / 5
-      else -> null
-    }
-
-  private fun parseSecurityTypes(capabilities: String?): Set<WifiSecurity> {
-    val caps = capabilities.orEmpty()
-    val types = linkedSetOf<WifiSecurity>()
-    if ("WPA3" in caps || "SAE" in caps) types += WifiSecurity.WPA3
-    if ("WPA2" in caps || "RSN" in caps) types += WifiSecurity.WPA2
-    if ("WPA-" in caps || "WPA/" in caps || "WPA]" in caps) types += WifiSecurity.WPA
-    if ("PSK" in caps) types += WifiSecurity.PSK
-    if ("EAP" in caps) types += WifiSecurity.EAP
-    if ("OWE" in caps) types += WifiSecurity.OWE
-    if ("WEP" in caps) types += WifiSecurity.WEP
-    if (types.isEmpty() && caps.contains("[ESS]")) types += WifiSecurity.OPEN
-    return types
-  }
-
-  private fun parseSecurity(capabilities: String?): String {
-    val labels = parseSecurityTypes(capabilities).map { it.label }
-    return if (labels.isEmpty()) "—" else labels.joinToString(" / ")
-  }
-
-  private fun securityRisk(capabilities: String?): String? {
-    val caps = capabilities.orEmpty()
-    return when {
-      "WEP" in caps -> "WEP (broken, trivially crackable)"
-      !caps.contains("WPA") && !caps.contains("RSN") && !caps.contains("SAE") && !caps.contains("OWE") -> "Open (unencrypted)"
-      "TKIP" in caps -> "TKIP cipher (deprecated)"
-      "WPA-" in caps && "WPA2" !in caps && "WPA3" !in caps -> "WPA-original (superseded by WPA2/3)"
-      else -> null
-    }
-  }
-
-  private fun hasWps(capabilities: String?): Boolean = capabilities.orEmpty().let { "[WPS]" in it || "WPS]" in it }
-
-  private fun mfpStatus(capabilities: String?): String {
-    val caps = capabilities.orEmpty()
-    return when {
-      "MFPR" in caps -> "Required"
-      "MFPC" in caps -> "Capable"
-      else -> "Not advertised"
-    }
   }
 
   private fun sanitizeRssi(raw: Int): Int? {

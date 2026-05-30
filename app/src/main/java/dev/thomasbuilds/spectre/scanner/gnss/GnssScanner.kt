@@ -1,4 +1,4 @@
-package dev.thomasbuilds.spectre.scanner
+package dev.thomasbuilds.spectre.scanner.gnss
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -16,6 +16,7 @@ import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.GnssSignal
 import dev.thomasbuilds.spectre.model.GnssSourceState
 import dev.thomasbuilds.spectre.model.ScannerStatus
+import dev.thomasbuilds.spectre.scanner.ReadinessTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -66,10 +67,10 @@ class GnssScanner(
       override fun onSatelliteStatusChanged(status: GnssStatus) {
         val rawCount = status.satelliteCount
         val raw = ArrayList<RawSatelliteEntry>(rawCount)
-        for (i in 0 until rawCount) {
+        for (i in 0..<rawCount) {
           raw.add(
             RawSatelliteEntry(
-              constellation = mapConstellation(status.getConstellationType(i)),
+              constellation = GnssBands.constellationFor(status.getConstellationType(i)),
               svid = status.getSvid(i),
               cn0DbHz = status.getCn0DbHz(i),
               baseband = if (status.hasBasebandCn0DbHz(i)) status.getBasebandCn0DbHz(i) else null,
@@ -137,7 +138,7 @@ class GnssScanner(
                 }
                 bandsByCn0.forEachIndexed { idx, b ->
                   val bandLabel =
-                    b.carrierHz?.let { gnssBandName(b.constellation, it) }
+                    b.carrierHz?.let { GnssBands.bandName(b.constellation, it) }
                       ?: b.carrierHz?.let { "${"%.0f".format(it / 1_000_000f)} MHz" }
                       ?: "Band ${idx + 1}"
                   val basebandStr = b.baseband?.let { " (baseband ${"%.1f".format(it)})" } ?: ""
@@ -161,74 +162,6 @@ class GnssScanner(
 
   @Volatile private var lastLocation: android.location.Location? = null
   private val locationListener = LocationListener { loc -> lastLocation = loc }
-
-  private fun gnssBandName(
-    constellation: Constellation,
-    freqHz: Float
-  ): String? {
-    fun near(target: Double): Boolean = kotlin.math.abs(freqHz - target) < 10_000_000.0
-    return when (constellation) {
-      Constellation.GPS -> {
-        when {
-          near(1_575_420_000.0) -> "L1"
-          near(1_227_600_000.0) -> "L2"
-          near(1_176_450_000.0) -> "L5"
-          else -> null
-        }
-      }
-
-      Constellation.GALILEO -> {
-        when {
-          near(1_575_420_000.0) -> "E1"
-          near(1_176_450_000.0) -> "E5a"
-          near(1_207_140_000.0) -> "E5b"
-          else -> null
-        }
-      }
-
-      Constellation.GLONASS -> {
-        when {
-          near(1_602_000_000.0) -> "L1"
-          near(1_246_000_000.0) -> "L2"
-          else -> null
-        }
-      }
-
-      Constellation.BEIDOU -> {
-        when {
-          near(1_561_098_000.0) -> "B1I"
-          near(1_575_420_000.0) -> "B1C"
-          near(1_176_450_000.0) -> "B2a"
-          near(1_268_520_000.0) -> "B3"
-          else -> null
-        }
-      }
-
-      Constellation.QZSS -> {
-        when {
-          near(1_575_420_000.0) -> "L1"
-          near(1_176_450_000.0) -> "L5"
-          else -> null
-        }
-      }
-
-      else -> {
-        null
-      }
-    }
-  }
-
-  private fun mapConstellation(c: Int): Constellation =
-    when (c) {
-      GnssStatus.CONSTELLATION_GPS -> Constellation.GPS
-      GnssStatus.CONSTELLATION_GLONASS -> Constellation.GLONASS
-      GnssStatus.CONSTELLATION_GALILEO -> Constellation.GALILEO
-      GnssStatus.CONSTELLATION_BEIDOU -> Constellation.BEIDOU
-      GnssStatus.CONSTELLATION_QZSS -> Constellation.QZSS
-      GnssStatus.CONSTELLATION_IRNSS -> Constellation.IRNSS
-      GnssStatus.CONSTELLATION_SBAS -> Constellation.SBAS
-      else -> Constellation.UNKNOWN
-    }
 
   fun hasPermission(): Boolean =
     ContextCompat.checkSelfPermission(

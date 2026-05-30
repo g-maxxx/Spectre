@@ -34,14 +34,14 @@ class SsdpDiscovery(
 
         try {
           listOf("upnp:rootdevice", "ssdp:all").forEach { st ->
-            val msg = buildMSearch(st)
+            val msg = SsdpParser.mSearch(st)
             runCatching {
               socket.send(
                 DatagramPacket(
                   msg,
                   msg.size,
-                  InetAddress.getByName(SSDP_MULTICAST_HOST),
-                  SSDP_PORT
+                  InetAddress.getByName(SsdpParser.MULTICAST_HOST),
+                  SsdpParser.PORT
                 )
               )
             }.onFailure { Log.w(TAG, "M-SEARCH send failed for $st: ${it.message}") }
@@ -60,7 +60,7 @@ class SsdpDiscovery(
               break
             }
             val raw = String(packet.data, 0, packet.length, Charsets.UTF_8)
-            val device = parseResponse(raw, packet.address.hostAddress ?: continue) ?: continue
+            val device = SsdpParser.parse(raw, packet.address.hostAddress ?: continue) ?: continue
             if (seen.add(device.usn)) {
               trySend(device)
             }
@@ -71,49 +71,7 @@ class SsdpDiscovery(
       }
     }
 
-  private fun buildMSearch(searchTarget: String): ByteArray =
-    (
-      "M-SEARCH * HTTP/1.1\r\n" +
-        "HOST: $SSDP_MULTICAST_HOST:$SSDP_PORT\r\n" +
-        "MAN: \"ssdp:discover\"\r\n" +
-        "MX: 2\r\n" +
-        "ST: $searchTarget\r\n" +
-        "USER-AGENT: Spectre-Recon/1.0\r\n" +
-        "\r\n"
-    ).toByteArray(Charsets.US_ASCII)
-
-  private fun parseResponse(
-    raw: String,
-    fromIp: String
-  ): SsdpDevice? {
-    val lines = raw.lineSequence().toList()
-    if (lines.isEmpty()) return null
-    val statusLine = lines[0].trim()
-    val isResponse = statusLine.startsWith("HTTP/1.1 200", ignoreCase = true)
-    val isNotify = statusLine.startsWith("NOTIFY ", ignoreCase = true)
-    if (!isResponse && !isNotify) return null
-
-    val headers =
-      lines
-        .drop(1)
-        .mapNotNull { line ->
-          val idx = line.indexOf(':')
-          if (idx < 1) return@mapNotNull null
-          line.substring(0, idx).trim().lowercase() to line.substring(idx + 1).trim()
-        }.toMap()
-
-    val usn = headers["usn"] ?: return null
-    return SsdpDevice(
-      ip = fromIp,
-      location = headers["location"],
-      server = headers["server"],
-      usn = usn
-    )
-  }
-
   private companion object {
     const val TAG = "SsdpDiscovery"
-    const val SSDP_MULTICAST_HOST = "239.255.255.250"
-    const val SSDP_PORT = 1900
   }
 }

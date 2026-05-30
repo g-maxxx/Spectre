@@ -13,7 +13,7 @@ object ExposureCalculator {
 
   private const val MIN_DETECTABLE_MW = 1e-15
 
-  fun cellularPowerMw(cells: List<CellSignal>): Double {
+  private fun cellularPowerMw(cells: List<CellSignal>): Double {
     // Co-channel cells (a serving cell plus its neighbors, or one channel seen by both SIMs)
     // are the same physical transmission, so count only the strongest per channel; cells with
     // no known channel can't be deduped and are summed individually.
@@ -30,9 +30,9 @@ object ExposureCalculator {
     return keyedMw + unkeyedMw
   }
 
-  fun wifiPowerMw(aps: List<WifiSignal>): Double = aps.sumOf { dbmToMw(it.rssi) }
+  private fun wifiPowerMw(aps: List<WifiSignal>): Double = aps.sumOf { dbmToMw(it.rssi) }
 
-  fun bluetoothPowerMw(devices: List<BluetoothSignal>): Double = devices.sumOf { dbmToMw(it.rssi) }
+  private fun bluetoothPowerMw(devices: List<BluetoothSignal>): Double = devices.sumOf { dbmToMw(it.rssi) }
 
   fun totalExposureDbm(
     cellular: List<CellSignal>,
