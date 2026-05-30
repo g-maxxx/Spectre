@@ -143,8 +143,8 @@ fun LazyListScope.detailListSection(
           visible
         } else {
           when (holder.btFilterMode) {
-            BluetoothFilterMode.INCLUDE -> visible.filter { matchesManufacturerFilter(it, filterTokens) }
-            BluetoothFilterMode.EXCLUDE -> visible.filterNot { matchesManufacturerFilter(it, filterTokens) }
+            BluetoothFilterMode.INCLUDE -> visible.filter { matchesManufacturerFilter(it.details, filterTokens) }
+            BluetoothFilterMode.EXCLUDE -> visible.filterNot { matchesManufacturerFilter(it.details, filterTokens) }
           }
         }
       val sorted =
@@ -416,12 +416,12 @@ private fun parseFilterTokens(input: String): List<String> =
     .filter { it.isNotBlank() }
 
 private fun matchesManufacturerFilter(
-  signal: BluetoothSignal,
+  details: List<DetailEntry>,
   tokens: List<String>
 ): Boolean {
   if (tokens.isEmpty()) return true
   val manuEntry =
-    signal.details
+    details
       .firstOrNull { it.label == "Manufacturer" }
       ?.value
       ?.lowercase()

@@ -308,9 +308,9 @@ class LanScanner(
     if (port in TLS_PORTS) return null
     val httpFirst = port in HTTP_PROBE_PORTS
     val first = readProbe(host, port, timeoutMs, if (httpFirst) httpGet(host) else null)
-    ServiceFingerprinter.identify(first, port)?.let { return it }
+    ServiceFingerprinter.identify(first)?.let { return it }
     val second = readProbe(host, port, timeoutMs, if (httpFirst) null else httpGet(host))
-    ServiceFingerprinter.identify(second, port)?.let { return it }
+    ServiceFingerprinter.identify(second)?.let { return it }
     return (first ?: second)
       ?.lineSequence()
       ?.firstOrNull()

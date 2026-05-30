@@ -160,7 +160,7 @@ class BluetoothScanner(
       }
 
       else -> {
-        name = resolveNameViaIpc(result)
+        name = resolveNameViaIpc(result.device)
         nameIpcAttempted = true
       }
     }
@@ -182,7 +182,7 @@ class BluetoothScanner(
     if (previous == null) publishTrigger.tryEmit(Unit)
   }
 
-  private fun resolveNameViaIpc(result: ScanResult): String {
+  private fun resolveNameViaIpc(device: BluetoothDevice): String {
     val deviceName =
       runCatching {
         if (ContextCompat.checkSelfPermission(
@@ -191,7 +191,7 @@ class BluetoothScanner(
           ) == PackageManager.PERMISSION_GRANTED
         ) {
           @SuppressLint("MissingPermission")
-          result.device.name
+          device.name
         } else {
           null
         }

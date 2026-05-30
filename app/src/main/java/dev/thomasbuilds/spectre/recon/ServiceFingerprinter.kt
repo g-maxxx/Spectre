@@ -1,10 +1,7 @@
 package dev.thomasbuilds.spectre.recon
 
 object ServiceFingerprinter {
-  fun identify(
-    response: String?,
-    port: Int
-  ): String? {
+  fun identify(response: String?): String? {
     if (response.isNullOrEmpty()) return null
 
     if (response.startsWith("HTTP/")) {
