@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.system.ErrnoException
 import android.system.OsConstants
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -27,6 +28,8 @@ import java.net.NetworkInterface
 import java.nio.ByteBuffer
 import java.nio.channels.AsynchronousSocketChannel
 import java.nio.channels.CompletionHandler
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -228,12 +231,31 @@ class LanScanner(
     channelFlow {
       localAccessBlocked = false
       val ips = enumerateSubnet(subnet) ?: return@channelFlow
-      withContext(io) {
-        coroutineScope {
-          ips.forEach { ip ->
-            launch { probeHost(ip, probePorts, timeoutMs)?.let { send(it) } }
+      // Pin the scan to the local non-VPN network so LAN probes can't leak into a VPN tunnel and
+      // get wildcard-answered for every address (process-scoped; restored in finally).
+      val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+      val localNet = LocalNetwork.pick(context)
+      val previousBound = cm?.boundNetworkForProcess
+      if (cm != null && localNet != null) cm.bindProcessToNetwork(localNet)
+      try {
+        val hostCount = AtomicInteger(0)
+        val signatures = ConcurrentHashMap<String, Int>()
+        withContext(io) {
+          coroutineScope {
+            ips.forEach { ip ->
+              launch {
+                probeHost(ip, probePorts, timeoutMs)?.let {
+                  hostCount.incrementAndGet()
+                  signatures.merge(it.openPorts.joinToString(","), 1) { a, b -> a + b }
+                  send(it)
+                }
+              }
+            }
           }
         }
+        Log.i(TAG, "scan done: pinned=$localNet hosts=${hostCount.get()} signatures=${signatures.size}")
+      } finally {
+        if (cm != null && localNet != null) cm.bindProcessToNetwork(previousBound)
       }
     }
 
@@ -427,6 +449,8 @@ class LanScanner(
   }
 
   companion object {
+    private const val TAG = "LanScanner"
+
     private val VPN_INTERFACE_PREFIXES =
       listOf("tun", "tap", "ppp", "wireguard", "wg", "ipsec", "nordlynx")
 

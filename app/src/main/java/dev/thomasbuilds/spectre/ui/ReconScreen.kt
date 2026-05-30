@@ -67,7 +67,7 @@ fun ReconScreen(onBack: () -> Unit) {
   val context = LocalContext.current
   val scanner = remember { LanScanner(context) }
   val mdnsScanner = remember { MdnsBrowser(context) }
-  val ssdpScanner = remember { SsdpDiscovery() }
+  val ssdpScanner = remember { SsdpDiscovery(context) }
   val scope = rememberCoroutineScope()
 
   var subnet by remember { mutableStateOf<SubnetInfo?>(null) }
