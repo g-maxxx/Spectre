@@ -26,14 +26,16 @@ internal val SpacedHexFormat = HexFormat { bytes { byteSeparator = " " } }
 
 internal fun bytesToHex(bytes: ByteArray): String = bytes.toHexString(SpacedHexFormat)
 
-internal fun shortenUuid(uuid: String): String {
+internal fun shortUuidCode(uuid: String): String? {
   val lower = uuid.lowercase()
   return if (lower.startsWith("0000") && lower.endsWith("-0000-1000-8000-00805f9b34fb")) {
-    "0x${lower.substring(4, 8)}"
+    lower.substring(4, 8)
   } else {
-    uuid
+    null
   }
 }
+
+internal fun shortenUuid(uuid: String): String = shortUuidCode(uuid)?.let { "0x$it" } ?: uuid
 
 internal fun parseIbeaconMeasuredPower(appleData: ByteArray): Int? {
   if (appleData.size < 23) return null

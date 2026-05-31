@@ -88,6 +88,7 @@ class GattInspector(
   @SuppressLint("MissingPermission")
   fun inspect(
     mac: String,
+    liveDevice: BluetoothDevice?,
     callback: (GattInspection) -> Unit
   ) {
     if (!hasPermission()) {
@@ -99,8 +100,7 @@ class GattInspector(
       callback(GattInspection.Failed(mac, "Bluetooth is off"))
       return
     }
-    val device = runCatching { a.getRemoteDevice(mac) }.getOrNull()
-    if (device == null) {
+    if (!BluetoothAdapter.checkBluetoothAddress(mac)) {
       callback(GattInspection.Failed(mac, "Invalid MAC"))
       return
     }
@@ -126,8 +126,17 @@ class GattInspector(
         ) {
           when (newState) {
             BluetoothProfile.STATE_CONNECTED -> {
-              s.deliver(GattInspection.DiscoveringServices(mac))
-              runCatching { g.discoverServices() }
+              mainHandler.post {
+                if (s.completed || s.cancelled) {
+                  runCatching { g.close() }
+                  if (gatt == g) gatt = null
+                  return@post
+                }
+                s.connected = true
+                s.disarmConnectTimeout()
+                s.deliver(GattInspection.DiscoveringServices(mac))
+                runCatching { g.discoverServices() }
+              }
             }
 
             BluetoothProfile.STATE_DISCONNECTED -> {
@@ -136,6 +145,15 @@ class GattInspector(
                   s.completed -> {
                     runCatching { g.close() }
                     if (gatt == g) gatt = null
+                  }
+
+                  !s.connected &&
+                    status != BluetoothGatt.GATT_SUCCESS &&
+                    s.connectRetries < MAX_CONNECT_RETRIES -> {
+                    s.connectRetries++
+                    runCatching { g.close() }
+                    if (gatt == g) gatt = null
+                    mainHandler.postDelayed({ connect(s) }, RETRY_DELAY_MS)
                   }
 
                   status != BluetoothGatt.GATT_SUCCESS -> {
@@ -155,13 +173,13 @@ class GattInspector(
           g: BluetoothGatt,
           status: Int
         ) {
-          if (status != BluetoothGatt.GATT_SUCCESS) {
-            mainHandler.post { s.finishWithError(g, "Service discovery failed (status $status)") }
-            return
-          }
-          val services = g.services
           mainHandler.post {
-            s.bind(g, services)
+            if (s.completed || s.cancelled) return@post
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+              s.finishWithError(g, "Service discovery failed (status $status)")
+              return@post
+            }
+            s.bind(g.services)
             s.startReading()
           }
         }
@@ -173,18 +191,6 @@ class GattInspector(
           status: Int
         ) {
           val uuid = characteristic.uuid.toString()
-          mainHandler.post { s.onRead(uuid, value, status) }
-        }
-
-        @Deprecated("API < 33 fallback")
-        @Suppress("DEPRECATION")
-        override fun onCharacteristicRead(
-          g: BluetoothGatt,
-          characteristic: BluetoothGattCharacteristic,
-          status: Int
-        ) {
-          val uuid = characteristic.uuid.toString()
-          val value = characteristic.value ?: ByteArray(0)
           mainHandler.post { s.onRead(uuid, value, status) }
         }
 
@@ -204,16 +210,39 @@ class GattInspector(
         }
       }
 
-    @Suppress("DEPRECATION")
-    val newGatt =
-      device.connectGatt(
-        context,
-        false,
-        cb,
-        BluetoothDevice.TRANSPORT_LE,
-        BluetoothDevice.PHY_LE_1M_MASK
-      )
-    gatt = newGatt
+    s.callbackObj = cb
+
+    // Prefer the scan's live device: it carries the peer's real LE address type, so random
+    // MACs connect instead of 133-ing (getRemoteDevice would assume a public address).
+    val target = liveDevice ?: runCatching { a.getRemoteDevice(mac) }.getOrNull()
+    if (target == null) {
+      s.finishWithError(null, "Invalid MAC")
+      return
+    }
+    s.target = target
+    s.autoConnect = liveDevice == null
+    s.armConnectTimeout()
+    mainHandler.post { connect(s) }
+  }
+
+  @SuppressLint("MissingPermission")
+  @Suppress("DEPRECATION")
+  private fun connect(s: Session) {
+    if (s.cancelled || s.completed) return
+    val g =
+      runCatching {
+        s.target.connectGatt(
+          context,
+          s.autoConnect,
+          s.callbackObj,
+          BluetoothDevice.TRANSPORT_LE
+        )
+      }.getOrNull()
+    if (g == null) {
+      s.finishWithError(null, "connectGatt returned null")
+      return
+    }
+    gatt = g
   }
 
   @SuppressLint("MissingPermission")
@@ -287,19 +316,21 @@ class GattInspector(
     @Volatile var completed: Boolean = false
 
     @Volatile var cancelled: Boolean = false
-    private var gattRef: BluetoothGatt? = null
+
+    @Volatile var connected: Boolean = false
+    var connectRetries: Int = 0
+    var autoConnect: Boolean = false
+    lateinit var target: BluetoothDevice
+    lateinit var callbackObj: BluetoothGattCallback
+    private var connectTimeoutToken: Runnable? = null
     private var services: List<BluetoothGattService> = emptyList()
     private val queue = ArrayDeque<BluetoothGattCharacteristic>()
     private val values = mutableMapOf<String, String>()
     private var totalReads = 0
-    private var doneReads = 0
+    private val doneReads get() = totalReads - queue.size
     private var timeoutToken: Runnable? = null
 
-    fun bind(
-      g: BluetoothGatt,
-      svcs: List<BluetoothGattService>
-    ) {
-      gattRef = g
+    fun bind(svcs: List<BluetoothGattService>) {
       services = svcs
       svcs.forEach { svc ->
         svc.characteristics.forEach { ch ->
@@ -320,7 +351,7 @@ class GattInspector(
     private fun readNext() {
       if (cancelled || completed) return
       val next = queue.firstOrNull()
-      val g = gattRef
+      val g = gatt
       if (next == null || g == null) {
         deliverDone(g, close = false)
         return
@@ -328,7 +359,6 @@ class GattInspector(
       val ok = runCatching { g.readCharacteristic(next) }.getOrDefault(false)
       if (!ok) {
         queue.removeFirst()
-        doneReads++
         mainHandler.post { readNext() }
         return
       }
@@ -346,7 +376,6 @@ class GattInspector(
       val expected = queue.first().uuid.toString()
       if (expected != uuid) return
       queue.removeFirst()
-      doneReads++
       if (status == BluetoothGatt.GATT_SUCCESS) {
         val decoded =
           runCatching { GattValueDecoder.decode(uuid, value) }
@@ -364,7 +393,6 @@ class GattInspector(
           if (completed || cancelled) return@Runnable
           if (queue.isNotEmpty() && queue.first().uuid.toString() == uuid) {
             queue.removeFirst()
-            doneReads++
             deliver(GattInspection.ReadingValues(mac, doneReads, totalReads))
             readNext()
           }
@@ -378,7 +406,21 @@ class GattInspector(
       timeoutToken = null
     }
 
-    @SuppressLint("MissingPermission")
+    fun armConnectTimeout() {
+      val token =
+        Runnable {
+          if (connected || completed || cancelled) return@Runnable
+          finishWithError(gatt, "Connect timed out")
+        }
+      connectTimeoutToken = token
+      mainHandler.postDelayed(token, CONNECT_TIMEOUT_MS)
+    }
+
+    fun disarmConnectTimeout() {
+      connectTimeoutToken?.let { mainHandler.removeCallbacks(it) }
+      connectTimeoutToken = null
+    }
+
     fun deliverDone(
       g: BluetoothGatt?,
       close: Boolean
@@ -386,19 +428,12 @@ class GattInspector(
       if (completed) return
       completed = true
       disarmTimeout()
+      disarmConnectTimeout()
       val infos = services.map { it.toInfo(values) }
       deliver(GattInspection.Done(mac, infos))
-      if (close) {
-        runCatching {
-          g?.disconnect()
-          g?.close()
-        }
-        if (gatt == g) gatt = null
-        if (session === this) session = null
-      }
+      if (close) detach(g)
     }
 
-    @SuppressLint("MissingPermission")
     fun finishWithError(
       g: BluetoothGatt?,
       reason: String
@@ -406,7 +441,13 @@ class GattInspector(
       if (completed) return
       completed = true
       disarmTimeout()
+      disarmConnectTimeout()
       deliver(GattInspection.Failed(mac, reason))
+      detach(g)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun detach(g: BluetoothGatt?) {
       runCatching {
         g?.disconnect()
         g?.close()
@@ -455,5 +496,8 @@ class GattInspector(
   private companion object {
     const val READ_TIMEOUT_MS = 3_000L
     const val WRITE_TIMEOUT_MS = 4_000L
+    const val CONNECT_TIMEOUT_MS = 12_000L
+    const val RETRY_DELAY_MS = 600L
+    const val MAX_CONNECT_RETRIES = 2
   }
 }

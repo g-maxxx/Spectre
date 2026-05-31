@@ -1,5 +1,6 @@
 package dev.thomasbuilds.spectre.ui.components
 
+import android.bluetooth.BluetoothDevice
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -47,19 +48,21 @@ import dev.thomasbuilds.spectre.scanner.ble.GattCharacteristicInfo
 import dev.thomasbuilds.spectre.scanner.ble.GattInspection
 import dev.thomasbuilds.spectre.scanner.ble.GattInspector
 import dev.thomasbuilds.spectre.scanner.ble.GattServiceInfo
+import dev.thomasbuilds.spectre.scanner.ble.shortenUuid
 
 @Composable
 internal fun BluetoothExpandable(
   device: BluetoothSignal,
   expanded: Boolean,
-  onToggle: () -> Unit
+  onToggle: () -> Unit,
+  resolveBleDevice: (String) -> BluetoothDevice?
 ) {
   val context = LocalContext.current
   val inspector = remember { GattInspector(context) }
   var inspection by remember(device.mac) { mutableStateOf<GattInspection>(GattInspection.Idle) }
   var writeTarget by remember(device.mac) { mutableStateOf<Pair<String, GattCharacteristicInfo>?>(null) }
 
-  DisposableEffect(device.mac) {
+  DisposableEffect(device.mac, expanded) {
     onDispose { inspector.cancel() }
   }
 
@@ -94,7 +97,7 @@ internal fun BluetoothExpandable(
             OutlinedButton(
               onClick = {
                 inspection = GattInspection.Connecting(device.mac)
-                inspector.inspect(device.mac) { inspection = it }
+                inspector.inspect(device.mac, resolveBleDevice(device.mac)) { inspection = it }
               },
               enabled =
                 inspection !is GattInspection.Connecting &&
@@ -284,7 +287,7 @@ private fun GattServicesView(
             ).padding(horizontal = 10.dp, vertical = 6.dp)
       ) {
         Text(
-          service.label ?: shortUuid(service.uuid),
+          service.label ?: shortenUuid(service.uuid),
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.primary
         )
@@ -296,7 +299,7 @@ private fun GattServicesView(
         service.characteristics.forEach { ch ->
           Column(modifier = Modifier.padding(top = 6.dp, start = 6.dp)) {
             Text(
-              ch.label ?: shortUuid(ch.uuid),
+              ch.label ?: shortenUuid(ch.uuid),
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurface
             )
@@ -312,7 +315,7 @@ private fun GattServicesView(
               )
             }
             Text(
-              "${shortUuid(ch.uuid)} · ${ch.properties.joinToString(",")}",
+              "${shortenUuid(ch.uuid)} · ${ch.properties.joinToString(",")}",
               style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
               color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -342,7 +345,7 @@ private fun GattWriteDialog(
   val bytes = remember(hex) { parseHexOrNull(hex) }
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Write ${characteristic.label ?: shortUuid(characteristic.uuid)}") },
+    title = { Text("Write ${characteristic.label ?: shortenUuid(characteristic.uuid)}") },
     text = {
       Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
@@ -380,13 +383,4 @@ private fun parseHexOrNull(input: String): ByteArray? {
   return runCatching {
     ByteArray(clean.length / 2) { i -> clean.substring(i * 2, i * 2 + 2).toInt(16).toByte() }
   }.getOrNull()
-}
-
-private fun shortUuid(uuid: String): String {
-  val lower = uuid.lowercase()
-  return if (lower.startsWith("0000") && lower.endsWith("-0000-1000-8000-00805f9b34fb")) {
-    "0x${lower.substring(4, 8)}"
-  } else {
-    uuid
-  }
 }

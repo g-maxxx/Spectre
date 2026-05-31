@@ -1,5 +1,6 @@
 package dev.thomasbuilds.spectre.ui.components
 
+import android.bluetooth.BluetoothDevice
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,7 +64,8 @@ fun LazyListScope.detailListSection(
   onToggle: (String, Int) -> Unit,
   onOpenRecon: () -> Unit,
   showStaleWifi: Boolean,
-  showStaleBluetooth: Boolean
+  showStaleBluetooth: Boolean,
+  resolveBleDevice: (String) -> BluetoothDevice?
 ) {
   when (source) {
     SignalSource.CELLULAR -> {
@@ -175,7 +177,8 @@ fun LazyListScope.detailListSection(
               BluetoothExpandable(
                 device = b,
                 expanded = expandedKey == b.mac,
-                onToggle = { onToggle(b.mac, idx) }
+                onToggle = { onToggle(b.mac, idx) },
+                resolveBleDevice = resolveBleDevice
               )
             }
           }

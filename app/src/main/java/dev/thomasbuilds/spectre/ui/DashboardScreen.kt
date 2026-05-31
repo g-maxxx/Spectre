@@ -337,7 +337,8 @@ fun DashboardScreen(
           onToggle = onToggleDetail,
           onOpenRecon = onOpenRecon,
           showStaleWifi = settings.showStaleWifi,
-          showStaleBluetooth = settings.showStaleBluetooth
+          showStaleBluetooth = settings.showStaleBluetooth,
+          resolveBleDevice = viewModel::bleRemoteDevice
         )
       }
     }

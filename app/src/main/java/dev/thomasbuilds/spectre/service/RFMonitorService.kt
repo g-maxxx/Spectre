@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -56,6 +57,8 @@ class RFMonitorService : Service() {
   private lateinit var wifiScanner: WifiScanner
   private lateinit var bluetoothScanner: BluetoothScanner
   private lateinit var gnssScanner: GnssScanner
+
+  fun bleRemoteDevice(mac: String): BluetoothDevice? = if (::bluetoothScanner.isInitialized) bluetoothScanner.remoteDevice(mac) else null
 
   private val _state = MutableStateFlow(ScanState.Loading)
   val state: StateFlow<ScanState> get() = _state

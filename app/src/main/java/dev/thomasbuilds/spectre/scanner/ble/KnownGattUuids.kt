@@ -126,19 +126,10 @@ internal object KnownGattUuids {
     )
 
   fun serviceName(uuid: String): String? =
-    lookupShortUuid(uuid)?.let { SERVICES[it] }
+    shortUuidCode(uuid)?.let { SERVICES[it] }
       ?: FULL_SERVICES[uuid.lowercase()]
 
   fun characteristicName(uuid: String): String? =
-    lookupShortUuid(uuid)?.let { CHARACTERISTICS[it] }
+    shortUuidCode(uuid)?.let { CHARACTERISTICS[it] }
       ?: FULL_CHARACTERISTICS[uuid.lowercase()]
-
-  private fun lookupShortUuid(full: String): String? {
-    val lower = full.lowercase()
-    return if (lower.startsWith("0000") && lower.endsWith("-0000-1000-8000-00805f9b34fb")) {
-      lower.substring(4, 8)
-    } else {
-      null
-    }
-  }
 }

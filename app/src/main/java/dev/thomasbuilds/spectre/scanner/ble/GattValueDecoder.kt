@@ -6,7 +6,7 @@ object GattValueDecoder {
     bytes: ByteArray
   ): String {
     if (bytes.isEmpty()) return "(empty)"
-    val short = shortUuid(uuid)
+    val short = shortUuidCode(uuid)
     return when (short) {
       "2a00" -> bytes.asUtf8()
       "2a01" -> appearance(bytes.uint16le())
@@ -23,15 +23,6 @@ object GattValueDecoder {
       "2a6f" -> "${bytes.uint16le() / 100.0} %RH"
       "2af9" -> "${bytes[0].toInt() and 0xff}%"
       else -> bytes.preview()
-    }
-  }
-
-  private fun shortUuid(full: String): String? {
-    val lower = full.lowercase()
-    return if (lower.startsWith("0000") && lower.endsWith("-0000-1000-8000-00805f9b34fb")) {
-      lower.substring(4, 8)
-    } else {
-      null
     }
   }
 

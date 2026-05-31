@@ -1,6 +1,7 @@
 package dev.thomasbuilds.spectre.viewmodel
 
 import android.app.Application
+import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -97,6 +98,8 @@ class SpectreViewModel(
         boundService.value = null
       }
     }
+
+  fun bleRemoteDevice(mac: String): BluetoothDevice? = boundService.value?.bleRemoteDevice(mac)
 
   fun ensureServiceRunning() {
     if (!lm.isLocationEnabled) return

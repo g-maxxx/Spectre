@@ -53,6 +53,8 @@ class BluetoothScanner(
   private val _state = MutableStateFlow(BluetoothSourceState())
   val state: StateFlow<BluetoothSourceState> = _state.asStateFlow()
 
+  fun remoteDevice(mac: String): BluetoothDevice? = deviceCache[mac]?.latestResult?.device
+
   private data class DeviceState(
     val mac: String,
     val name: String,
@@ -497,9 +499,9 @@ class BluetoothScanner(
 
   private fun phyLabel(phy: Int): String =
     when (phy) {
-      android.bluetooth.BluetoothDevice.PHY_LE_1M -> "LE 1M"
-      android.bluetooth.BluetoothDevice.PHY_LE_2M -> "LE 2M"
-      android.bluetooth.BluetoothDevice.PHY_LE_CODED -> "LE Coded"
+      BluetoothDevice.PHY_LE_1M -> "LE 1M"
+      BluetoothDevice.PHY_LE_2M -> "LE 2M"
+      BluetoothDevice.PHY_LE_CODED -> "LE Coded"
       else -> "Unknown ($phy)"
     }
 
