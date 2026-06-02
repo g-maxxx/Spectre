@@ -389,7 +389,7 @@ class CellularScanner(
   }
 
   private fun sanitizeDbm(raw: Int?): Int? {
-    if (raw == null || raw == CellInfo.UNAVAILABLE) return null
+    if (raw == null || raw >= 0) return null
     return raw
   }
 
@@ -430,9 +430,9 @@ class CellularScanner(
           ?.takeIf { it.isNotEmpty() }
           ?.let { add(DetailEntry("Bands", it.joinToString { "n$it" })) }
         ss?.let {
-          if (it.ssRsrq != Int.MAX_VALUE && it.ssRsrq != CellInfo.UNAVAILABLE) add(DetailEntry("SS-RSRQ", "${it.ssRsrq} dB"))
-          if (it.ssSinr != Int.MAX_VALUE && it.ssSinr != CellInfo.UNAVAILABLE) add(DetailEntry("SS-SINR", "${it.ssSinr} dB"))
-          if (it.csiRsrp != Int.MAX_VALUE && it.csiRsrp != CellInfo.UNAVAILABLE) add(DetailEntry("CSI-RSRP", "${it.csiRsrp} dBm"))
+          if (it.ssRsrq != CellInfo.UNAVAILABLE) add(DetailEntry("SS-RSRQ", "${it.ssRsrq} dB"))
+          if (it.ssSinr != CellInfo.UNAVAILABLE) add(DetailEntry("SS-SINR", "${it.ssSinr} dB"))
+          if (it.csiRsrp != CellInfo.UNAVAILABLE) add(DetailEntry("CSI-RSRP", "${it.csiRsrp} dBm"))
         }
       }
     return CellSignal(
@@ -473,9 +473,9 @@ class CellularScanner(
         if (id.earfcn != Int.MAX_VALUE) add(DetailEntry("EARFCN", id.earfcn.toString()))
         if (id.bandwidth != Int.MAX_VALUE) add(DetailEntry("Bandwidth", "${id.bandwidth / 1000} MHz"))
         id.bands.takeIf { it.isNotEmpty() }?.let { add(DetailEntry("Bands", it.joinToString { "B$it" })) }
-        if (ss.rsrq != Int.MAX_VALUE && ss.rsrq != CellInfo.UNAVAILABLE) add(DetailEntry("RSRQ", "${ss.rsrq} dB"))
-        if (ss.rssnr != Int.MAX_VALUE && ss.rssnr != CellInfo.UNAVAILABLE) add(DetailEntry("SNR", "${ss.rssnr} dB"))
-        if (ss.cqi != Int.MAX_VALUE && ss.cqi != CellInfo.UNAVAILABLE) add(DetailEntry("CQI", ss.cqi.toString()))
+        if (ss.rsrq != CellInfo.UNAVAILABLE) add(DetailEntry("RSRQ", "${ss.rsrq} dB"))
+        if (ss.rssnr != CellInfo.UNAVAILABLE) add(DetailEntry("SNR", "${ss.rssnr} dB"))
+        if (ss.cqi != CellInfo.UNAVAILABLE) add(DetailEntry("CQI", ss.cqi.toString()))
         if (distance != null) add(DetailEntry("TA", ta.toString()))
       }
     return CellSignal(
@@ -497,7 +497,7 @@ class CellularScanner(
     val id: CellIdentityWcdma = info.cellIdentity
     val rawDbm = ss.dbm
     val dbm = sanitizeDbm(rawDbm) ?: return null
-    val ecNo = ss.ecNo.takeIf { it != Int.MAX_VALUE && it != CellInfo.UNAVAILABLE }
+    val ecNo = ss.ecNo.takeIf { it != CellInfo.UNAVAILABLE }
     val exposureDbm = if (ecNo != null) dbm - ecNo else dbm + WCDMA_RSCP_TO_RSSI_OFFSET_DB
     val cid = sanitizeCellId(id.cid) ?: 0
     val operator = id.operatorAlphaLong?.toString()?.takeIf { it.isNotBlank() }
@@ -545,7 +545,7 @@ class CellularScanner(
         if (id.lac != Int.MAX_VALUE) add(DetailEntry("LAC", id.lac.toString()))
         if (id.arfcn != Int.MAX_VALUE) add(DetailEntry("ARFCN", id.arfcn.toString()))
         if (id.bsic != Int.MAX_VALUE) add(DetailEntry("BSIC", id.bsic.toString()))
-        if (ss.bitErrorRate != Int.MAX_VALUE && ss.bitErrorRate != CellInfo.UNAVAILABLE) {
+        if (ss.bitErrorRate != CellInfo.UNAVAILABLE) {
           add(DetailEntry("BER", ss.bitErrorRate.toString()))
         }
         if (distance != null) add(DetailEntry("TA", ta.toString()))
