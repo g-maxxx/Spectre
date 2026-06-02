@@ -460,7 +460,7 @@ private fun ShowStaleToggle(
   onCheckedChange: (Boolean) -> Unit,
   description: String
 ) {
-  SheetSection(icon = Icons.Rounded.History, label = "No-longer-detected") {
+  SheetSection(icon = Icons.Rounded.History, label = "No longer detected") {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Text(
         description,

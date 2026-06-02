@@ -14,8 +14,8 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 data class Settings(
   val themeMode: ThemeMode = ThemeMode.SYSTEM,
-  val showStaleWifi: Boolean = true,
-  val showStaleBluetooth: Boolean = true
+  val showStaleWifi: Boolean = false,
+  val showStaleBluetooth: Boolean = false
 ) {
   companion object {
     val DEFAULTS = Settings()
@@ -31,11 +31,12 @@ class SettingsRepository(
 
   val settings: Flow<Settings> =
     store.data.map { prefs ->
-      val themeName = prefs[KEY_THEME] ?: ThemeMode.SYSTEM.name
       Settings(
-        themeMode = runCatching { ThemeMode.valueOf(themeName) }.getOrDefault(ThemeMode.SYSTEM),
-        showStaleWifi = prefs[KEY_SHOW_STALE_WIFI] ?: true,
-        showStaleBluetooth = prefs[KEY_SHOW_STALE_BT] ?: true
+        themeMode =
+          prefs[KEY_THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() }
+            ?: Settings.DEFAULTS.themeMode,
+        showStaleWifi = prefs[KEY_SHOW_STALE_WIFI] ?: Settings.DEFAULTS.showStaleWifi,
+        showStaleBluetooth = prefs[KEY_SHOW_STALE_BT] ?: Settings.DEFAULTS.showStaleBluetooth
       )
     }
 
@@ -52,11 +53,7 @@ class SettingsRepository(
   }
 
   suspend fun resetToDefaults() {
-    store.edit { prefs ->
-      prefs[KEY_THEME] = ThemeMode.SYSTEM.name
-      prefs[KEY_SHOW_STALE_WIFI] = true
-      prefs[KEY_SHOW_STALE_BT] = true
-    }
+    store.edit { it.clear() }
   }
 
   private companion object {
