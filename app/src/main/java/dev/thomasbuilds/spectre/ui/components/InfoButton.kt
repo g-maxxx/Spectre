@@ -39,13 +39,22 @@ fun InfoButton(
     )
   }
   if (showDialog) {
-    AlertDialog(
-      onDismissRequest = { showDialog = false },
-      title = { Text(title) },
-      text = { Text(body, style = MaterialTheme.typography.bodyMedium) },
-      confirmButton = {
-        TextButton(onClick = { showDialog = false }) { Text("Got it") }
-      }
-    )
+    HelpDialog(title, body) { showDialog = false }
   }
+}
+
+@Composable
+internal fun HelpDialog(
+  title: String,
+  body: String,
+  onDismiss: () -> Unit
+) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = { Text(title) },
+    text = { Text(body, style = MaterialTheme.typography.bodyMedium) },
+    confirmButton = {
+      TextButton(onClick = onDismiss) { Text("Got it") }
+    }
+  )
 }

@@ -29,9 +29,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -259,14 +264,6 @@ private fun DetailCardHeader(
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface
       )
-      if (source == SignalSource.WIFI) {
-        InfoButton(
-          title = "WiFi scan throttling",
-          body = dev.thomasbuilds.spectre.ui.HelpEntries.WifiThrottle,
-          buttonSize = 20.dp,
-          iconSize = 14.dp
-        )
-      }
       if (source == SignalSource.CELLULAR) {
         InfoButton(
           title = "Cellular monitoring",
@@ -682,13 +679,14 @@ private fun GnssHeader(g: GnssSignal) {
 
 @Composable
 private fun WifiThrottledTag() {
+  var showDialog by remember { mutableStateOf(false) }
   Box(
     modifier =
       Modifier
-        .background(
-          MaterialTheme.colorScheme.surfaceVariant,
-          RoundedCornerShape(percent = 50)
-        ).padding(horizontal = 10.dp, vertical = 2.dp)
+        .clip(RoundedCornerShape(percent = 50))
+        .clickable { showDialog = true }
+        .background(MaterialTheme.colorScheme.surfaceVariant)
+        .padding(horizontal = 10.dp, vertical = 2.dp)
   ) {
     Text(
       "THROTTLED",
@@ -700,6 +698,12 @@ private fun WifiThrottledTag() {
         ),
       color = MaterialTheme.colorScheme.onSurfaceVariant
     )
+  }
+  if (showDialog) {
+    HelpDialog(
+      title = "WiFi scan throttling",
+      body = dev.thomasbuilds.spectre.ui.HelpEntries.WifiThrottle
+    ) { showDialog = false }
   }
 }
 
