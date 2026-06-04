@@ -1,22 +1,6 @@
-<div align="center">
-
-<img src="icon.svg" alt="Spectre" width="128" height="128">
-
-# Spectre
-
-**Radio frequency scanner with recon and offensive capabilities**
-
-</div>
+![Spectre Banner](banner.png)
 
 Spectre shows the radio environment around you in one place: the cellular towers your phone can see, nearby WiFi access points, Bluetooth LE devices, and the GNSS satellites overhead. It also computes a single live "RF exposure" figure by power-summing everything it receives, all on-device.
-
-## How it works
-
-A bound foreground service hosts four independent scanners (cellular, WiFi, Bluetooth, GNSS). Each scanner wraps the relevant Android system APIs, keeps its own cache of what it has seen, and exposes a reactive stream of results. The service merges those four streams into a single immutable snapshot and recomputes the live exposure value whenever anything changes. The UI (Jetpack Compose) binds to the service and renders a dashboard: a central exposure gauge plus one card per source. Tapping a card expands a detailed, sortable, filterable list of everything that source has detected.
-
-Android gates all radio scanning behind the precise location permission, so Spectre needs it, with location switched on, before it can read anything at all. Scanning then keeps running through the foreground-service notification, so the dashboard stays current while the app is in the background; swipe the notification away to stop monitoring.
-
-**The exposure number.** Received signal strengths are reported in dBm, a logarithmic scale, so they cannot meaningfully be added together. Spectre converts each signal to linear power (milliwatts), sums them, and converts the total back to dBm. The result is dominated by the strongest emitters, which is the physically correct behavior for total received power. Cellular signals are normalized to a wideband-equivalent figure first, as explained below, so they are comparable to WiFi and Bluetooth.
 
 ## Features
 
@@ -28,11 +12,11 @@ Android gates all radio scanning behind the precise location permission, so Spec
 - **Local-network recon.** Host discovery through TCP-connect probes on common ports, with banner grabbing and reverse DNS, alongside mDNS / DNS-SD service discovery and SSDP / UPnP discovery, all limited to the LAN you are connected to.
 - **Active BLE tooling.** An iBeacon broadcaster with configurable UUID, major, minor, and measured power, plus the GATT read/write inspector above. These are intended for your own devices and authorized testing.
 
-## Android limitations, and how Spectre handles them
+## Android limitations
 
-Much of the work in Spectre goes into handling what Android does and does not let an ordinary app see.
+**Signal strength is a reference measurement, not total power.** Modems report RSRP (4G/5G) or RSCP (3G), the power of a single reference element, not the power of the whole channel. Spectre reconstructs a wideband estimate per network type. LTE uses the modem's own RSSI when it exposes one, otherwise a bandwidth-derived offset. NR (5G) uses a fixed offset because Android does not expose the NR channel bandwidth at all. WCDMA derives it from Ec/No, and GSM is already a total-power figure. The result is usually within a few dB of the true value.
 
-**Signal strength is a reference measurement, not total power.** Modems report RSRP (4G/5G) or RSCP (3G), the power of a single reference element, not the power of the whole channel. Spectre reconstructs a wideband estimate: LTE uses the modem's own RSSI when it exposes one, otherwise a bandwidth-derived offset; NR (5G) uses a fixed offset because Android does not expose the NR channel bandwidth at all; WCDMA derives it from Ec/No; GSM is already a total-power figure. The result is usually within a few dB of the true value.
+**Powers cannot be added in dBm.** dBm is logarithmic, so per-emitter strengths cannot meaningfully be summed. Spectre converts each to linear power (milliwatts), adds them, and converts back, so the exposure figure is dominated by the strongest emitters, which is the physically correct result for total received power. Cellular readings are first normalized to the wideband-equivalent figure above, so they are comparable to WiFi and Bluetooth.
 
 **5G NSA is invisible.** On most 5G networks the phone rides on a 4G anchor cell and adds a 5G carrier on top, and Android exposes only the 4G anchor to apps. The strength shown for a connected 5G NSA cell is therefore the anchor's, not the 5G signal carrying the data. Only standalone 5G (5G SA) returns a real 5G reading. This cannot be worked around, so it is disclosed clearly in the app.
 
@@ -43,10 +27,6 @@ Much of the work in Spectre goes into handling what Android does and does not le
 **GNSS needs an active fix to stream.** The satellite-status callback only fires while the GNSS engine is running, so Spectre keeps a location request active to hold the engine on. That same fix anchors each satellite's sub-satellite ground point.
 
 **Distance is not handed to you.** Android gives no distance to most emitters. Spectre uses true ranging where it exists (WiFi 802.11mc FTM, cellular timing advance) and a calibrated path-loss model otherwise, drawing on the iBeacon measured-power field when present, and labels every estimate with its confidence so you know which is which.
-
-## Privacy
-
-No Google services, no Firebase, no Play dependencies (AndroidX only), and no analytics. The app makes no internet connections; the recon feature only ever talks to the local network, and only when you start it.
 
 ## Sponsor
 
