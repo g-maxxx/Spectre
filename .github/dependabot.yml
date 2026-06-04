@@ -55,6 +55,11 @@ updates:
     labels:
       - dependencies
       - ci
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-patch
+          - version-update:semver-minor
     groups:
       actions:
         patterns:
