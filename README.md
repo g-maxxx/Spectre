@@ -24,8 +24,6 @@ Spectre shows the radio environment around you in one place: the cellular towers
 
 **WiFi scan throttling.** Android limits an app to roughly four WiFi scans every two minutes. Spectre paces itself to about one scan every 30 seconds while throttling is on, and faster once it is disabled in Developer options. It also consumes the results of system-initiated scans, so the list keeps updating even when its own scans are throttled.
 
-**GNSS needs an active fix to stream.** The satellite-status callback only fires while the GNSS engine is running, so Spectre keeps a location request active to hold the engine on. That same fix anchors each satellite's sub-satellite ground point.
-
 **Distance is not handed to you.** Android gives no distance to most emitters. Spectre uses true ranging where it exists (WiFi 802.11mc FTM, cellular timing advance) and a calibrated path-loss model otherwise, drawing on the iBeacon measured-power field when present, and labels every estimate with its confidence so you know which is which.
 
 ## Sponsor
