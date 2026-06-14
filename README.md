@@ -2,6 +2,15 @@
 
 Spectre shows the radio environment around you in one place: the cellular towers your phone can see, nearby WiFi access points, Bluetooth LE devices, and the GNSS satellites overhead. It also computes a single live "RF exposure" figure by power-summing everything it receives, all on-device.
 
+## Installation
+
+Requires **Android 12** (API 31) or later.
+
+1. Download the APK from the [github release](https://github.com/thomasbuilds/Spectre/releases/latest).
+2. Optionally verify the APK's signing certificate against the [`CERT.sha256`](CERT.sha256) fingerprint on the release.
+3. Open the file on your phone and allow installation from unknown sources when Android prompts you.
+4. Launch Spectre and grant the permissions it requests.
+
 ## Features
 
 - **Live RF exposure gauge.** A single number for the total received RF power across cellular, WiFi, and Bluetooth, colored by intensity.
