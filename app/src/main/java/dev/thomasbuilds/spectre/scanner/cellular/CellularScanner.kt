@@ -408,7 +408,10 @@ class CellularScanner(
         if (id != null && id.nci != Long.MAX_VALUE) add(DetailEntry("NCI", id.nci.toString()))
         if (id != null && id.pci != Int.MAX_VALUE) add(DetailEntry("PCI", id.pci.toString()))
         if (id != null && id.tac != Int.MAX_VALUE) add(DetailEntry("TAC", id.tac.toString()))
-        if (id != null && id.nrarfcn != Int.MAX_VALUE) add(DetailEntry("NR-ARFCN", id.nrarfcn.toString()))
+        if (id != null && id.nrarfcn != Int.MAX_VALUE) {
+          add(DetailEntry("NR-ARFCN", id.nrarfcn.toString()))
+          CellChannels.nrArfcnToMhz(id.nrarfcn)?.let { add(DetailEntry("Frequency", CellChannels.label(it))) }
+        }
         id
           ?.bands
           ?.takeIf { it.isNotEmpty() }
@@ -454,7 +457,10 @@ class CellularScanner(
         if (id.ci != Int.MAX_VALUE) add(DetailEntry("CI", id.ci.toString()))
         if (id.pci != Int.MAX_VALUE) add(DetailEntry("PCI", id.pci.toString()))
         if (id.tac != Int.MAX_VALUE) add(DetailEntry("TAC", id.tac.toString()))
-        if (id.earfcn != Int.MAX_VALUE) add(DetailEntry("EARFCN", id.earfcn.toString()))
+        if (id.earfcn != Int.MAX_VALUE) {
+          add(DetailEntry("EARFCN", id.earfcn.toString()))
+          CellChannels.earfcnToMhz(id.earfcn)?.let { add(DetailEntry("Frequency", CellChannels.label(it))) }
+        }
         if (id.bandwidth != Int.MAX_VALUE) add(DetailEntry("Bandwidth", "${id.bandwidth / 1000} MHz"))
         id.bands.takeIf { it.isNotEmpty() }?.let { add(DetailEntry("Bands", it.joinToString { "B$it" })) }
         if (ss.rsrq != CellInfo.UNAVAILABLE) add(DetailEntry("RSRQ", "${ss.rsrq} dB"))
@@ -493,7 +499,10 @@ class CellularScanner(
         if (id.cid != Int.MAX_VALUE) add(DetailEntry("CID", id.cid.toString()))
         if (id.psc != Int.MAX_VALUE) add(DetailEntry("PSC", id.psc.toString()))
         if (id.lac != Int.MAX_VALUE) add(DetailEntry("LAC", id.lac.toString()))
-        if (id.uarfcn != Int.MAX_VALUE) add(DetailEntry("UARFCN", id.uarfcn.toString()))
+        if (id.uarfcn != Int.MAX_VALUE) {
+          add(DetailEntry("UARFCN", id.uarfcn.toString()))
+          CellChannels.uarfcnToMhz(id.uarfcn)?.let { add(DetailEntry("Frequency", CellChannels.label(it))) }
+        }
       }
     return CellSignal(
       type = CellNetworkType.WCDMA_3G,
@@ -527,7 +536,10 @@ class CellularScanner(
         id.mncString?.let { add(DetailEntry("MNC", it)) }
         if (id.cid != Int.MAX_VALUE) add(DetailEntry("CID", id.cid.toString()))
         if (id.lac != Int.MAX_VALUE) add(DetailEntry("LAC", id.lac.toString()))
-        if (id.arfcn != Int.MAX_VALUE) add(DetailEntry("ARFCN", id.arfcn.toString()))
+        if (id.arfcn != Int.MAX_VALUE) {
+          add(DetailEntry("ARFCN", id.arfcn.toString()))
+          CellChannels.arfcnToMhz(id.arfcn)?.let { add(DetailEntry("Frequency", CellChannels.label(it))) }
+        }
         if (id.bsic != Int.MAX_VALUE) add(DetailEntry("BSIC", id.bsic.toString()))
         if (ss.bitErrorRate != CellInfo.UNAVAILABLE) {
           add(DetailEntry("BER", ss.bitErrorRate.toString()))
