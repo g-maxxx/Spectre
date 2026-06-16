@@ -22,15 +22,17 @@ internal object WifiCapabilities {
     return if (labels.isEmpty()) "—" else labels.joinToString(" / ")
   }
 
-  fun securityRisk(capabilities: String?): String? {
+  fun ciphers(capabilities: String?): String {
     val caps = capabilities.orEmpty()
-    return when {
-      "WEP" in caps -> "WEP (broken, trivially crackable)"
-      !caps.contains("WPA") && !caps.contains("RSN") && !caps.contains("SAE") && !caps.contains("OWE") -> "Open (unencrypted)"
-      "TKIP" in caps -> "TKIP cipher (deprecated)"
-      "WPA-" in caps && "WPA2" !in caps && "WPA3" !in caps -> "WPA-original (superseded by WPA2/3)"
-      else -> null
-    }
+    val found =
+      buildList {
+        if ("GCMP-256" in caps) add("GCMP-256")
+        if ("CCMP" in caps) add("CCMP")
+        if ("TKIP" in caps) add("TKIP")
+        if ("SMS4" in caps) add("SMS4")
+        if ("WEP" in caps) add("WEP")
+      }
+    return if (found.isEmpty()) "None" else found.joinToString(" / ")
   }
 
   fun hasWps(capabilities: String?): Boolean = capabilities.orEmpty().let { "[WPS]" in it || "WPS]" in it }

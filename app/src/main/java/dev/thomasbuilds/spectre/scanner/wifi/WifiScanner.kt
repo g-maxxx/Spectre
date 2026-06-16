@@ -351,7 +351,7 @@ class WifiScanner(
           add(DetailEntry("Center 1", "${sr.centerFreq1} MHz"))
         }
         add(DetailEntry("Security", securityLabel))
-        WifiCapabilities.securityRisk(sr.capabilities)?.let { add(DetailEntry("⚠ Risk", it)) }
+        add(DetailEntry("Cipher", WifiCapabilities.ciphers(sr.capabilities)))
         add(DetailEntry("WPS", WifiCapabilities.hasWps(sr.capabilities).toString()))
         add(DetailEntry("MFP (802.11w)", WifiCapabilities.mfpStatus(sr.capabilities)))
         add(DetailEntry("802.11mc FTM", sr.is80211mcResponder.toString()))
