@@ -231,11 +231,13 @@ class BluetoothScanner(
         }
       }
 
+    val addressType = addressTypeOrNull(result.device)
     val details =
       buildList {
         add(DetailEntry("Name", name))
         add(DetailEntry("MAC", mac))
-        if (!isRandomAddress(result.device)) {
+        // A random BLE address has no real OUI, so skip those we can detect (API 35+) to avoid a coincidental mislabel.
+        if (addressType != BluetoothDevice.ADDRESS_TYPE_RANDOM) {
           oui.vendor(mac)?.let { add(DetailEntry("Vendor", it)) }
         }
         if (advertisedTxPower != null) {
@@ -248,7 +250,7 @@ class BluetoothScanner(
         val connectableLabel =
           if (alternates) "${result.isConnectable} (alternates)" else result.isConnectable.toString()
         add(DetailEntry("Connectable", connectableLabel))
-        add(DetailEntry("Address type", addressTypeLabel(result.device)))
+        addressTypeLabel(addressType)?.let { add(DetailEntry("Address type", it)) }
         result.primaryPhy.takeIf { it != 0 }?.let { add(DetailEntry("Primary PHY", phyLabel(it))) }
         result.secondaryPhy.takeIf { it != 0 }?.let { add(DetailEntry("Secondary PHY", phyLabel(it))) }
         result.scanRecord?.serviceUuids?.takeIf { it.isNotEmpty() }?.let { uuids ->
@@ -468,25 +470,18 @@ class BluetoothScanner(
   }
 
   @SuppressLint("MissingPermission")
-  private fun addressTypeLabel(device: BluetoothDevice?): String {
-    if (device == null) return "—"
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-      return "Unknown (API 34)"
-    }
-    return when (device.addressType) {
+  private fun addressTypeOrNull(device: BluetoothDevice?): Int? {
+    if (device == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return null
+    return runCatching { device.addressType }.getOrNull()
+  }
+
+  private fun addressTypeLabel(type: Int?): String? =
+    when (type) {
       BluetoothDevice.ADDRESS_TYPE_PUBLIC -> "Public"
       BluetoothDevice.ADDRESS_TYPE_RANDOM -> "Random"
       BluetoothDevice.ADDRESS_TYPE_ANONYMOUS -> "Anonymous"
-      else -> "Unknown"
+      else -> null
     }
-  }
-
-  // A random BLE address has no real OUI, so skip those we can detect (API 35+) to avoid a coincidental mislabel.
-  @SuppressLint("MissingPermission")
-  private fun isRandomAddress(device: BluetoothDevice?): Boolean {
-    if (device == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return false
-    return runCatching { device.addressType == BluetoothDevice.ADDRESS_TYPE_RANDOM }.getOrDefault(false)
-  }
 
   private fun phyLabel(phy: Int): String =
     when (phy) {
