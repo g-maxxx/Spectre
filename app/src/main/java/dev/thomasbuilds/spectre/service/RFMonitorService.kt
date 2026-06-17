@@ -251,7 +251,7 @@ class RFMonitorService : Service() {
       ) { cell, wifi, bt, gnss, active ->
         // A registered cell or associated AP is only the live data connection when it matches
         // the active transport, so clear isConnected on the standby radio (e.g. cellular while
-        // connected over WiFi).
+        // connected over Wi-Fi).
         val cellSignals =
           if (active == DataTransport.CELLULAR) {
             cell.signals

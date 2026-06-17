@@ -312,7 +312,7 @@ private fun SubnetCard(subnet: SubnetInfo?) {
       Spacer(Modifier.height(8.dp))
       if (subnet == null) {
         Text(
-          "No active network. Connect to WiFi to enable recon.",
+          "No active network. Connect to Wi-Fi to enable recon.",
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant
         )

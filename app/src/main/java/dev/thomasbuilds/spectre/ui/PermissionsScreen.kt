@@ -80,7 +80,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
       Row(
         title = "Precise location",
         desc =
-          "Required by Android to enumerate WiFi access points, GNSS satellites, " +
+          "Required by Android to enumerate Wi-Fi access points, GNSS satellites, " +
             "Bluetooth devices, and cellular cell IDs. Location data stays on your device."
       )
       Row(

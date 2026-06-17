@@ -112,7 +112,7 @@ class LanScanner(
     val targetNet = wifiNet ?: ethernetNet ?: activeNet
     val pickReason =
       when {
-        wifiNet != null -> "WiFi (preferred over VPN)"
+        wifiNet != null -> "Wi-Fi (preferred over VPN)"
         ethernetNet != null -> "Ethernet (preferred over VPN)"
         activeNet != null -> "activeNetwork fallback"
         else -> "(no network)"

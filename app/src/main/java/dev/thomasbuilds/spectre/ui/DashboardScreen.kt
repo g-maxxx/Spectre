@@ -260,7 +260,7 @@ fun DashboardScreen(
               onClick = { handleCardTap(SignalSource.CELLULAR, state.cellularStatus) }
             )
             SignalCard(
-              title = "WiFi",
+              title = "Wi-Fi",
               icon = Icons.Rounded.Wifi,
               count = liveWifi.size,
               countLabel = if (liveWifi.size == 1) "AP" else "APs",
@@ -359,10 +359,10 @@ fun DashboardScreen(
 
   if (showWifiDialog) {
     EnableDialog(
-      title = "Enable WiFi?",
+      title = "Enable Wi-Fi?",
       body =
-        "Spectre needs WiFi turned on to scan for access points.\n\n" +
-          "Tap Enable to open the WiFi panel.",
+        "Spectre needs Wi-Fi turned on to scan for access points.\n\n" +
+          "Tap Enable to open the Wi-Fi panel.",
       confirmLabel = "Enable",
       onConfirm = {
         showWifiDialog = false
@@ -378,7 +378,7 @@ fun DashboardScreen(
   if (showLocationDialog) {
     EnableDialog(
       title = "Enable Location",
-      body = "Android requires precise location enabled for apps to scan cellular, WiFi, Bluetooth, and GNSS.",
+      body = "Android requires precise location enabled for apps to scan cellular, Wi-Fi, Bluetooth, and GNSS.",
       confirmLabel = "Open Settings",
       onConfirm = {
         showLocationDialog = false

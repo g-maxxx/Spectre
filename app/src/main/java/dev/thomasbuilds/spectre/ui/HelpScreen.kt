@@ -117,7 +117,7 @@ private val GLOSSARY =
         ),
         e(
           "RF exposure",
-          "The total radio power reaching your phone right now, summed across cellular, WiFi, and Bluetooth into one figure. It is dominated by the strongest nearby emitters."
+          "The total radio power reaching your phone right now, summed across cellular, Wi-Fi, and Bluetooth into one figure. It is dominated by the strongest nearby emitters."
         )
       )
     ),
@@ -160,7 +160,7 @@ private val GLOSSARY =
       )
     ),
     GlossarySection(
-      "WiFi",
+      "Wi-Fi",
       listOf(
         e("SSID", "The network name. Shown as Hidden when the network does not broadcast it."),
         e("BSSID", "The access point radio's MAC address. One physical router often runs several."),
@@ -172,7 +172,7 @@ private val GLOSSARY =
           "The protection in use. WPA3 is strongest, then WPA2 and the older WPA; OWE encrypts otherwise-open networks; Open and WEP offer no real protection."
         ),
         e("PSK / EAP", "How you authenticate: a Pre-Shared Key (a password) or EAP (enterprise login)."),
-        e("WPS", "WiFi Protected Setup, push-button or PIN pairing. Convenient but a well-known weak point."),
+        e("WPS", "Wi-Fi Protected Setup, push-button or PIN pairing. Convenient but a well-known weak point."),
         e(
           "MFP (802.11w)",
           "Management Frame Protection, which blocks forced-disconnect attacks. Shown as Required, Capable, or Not advertised."
@@ -246,7 +246,7 @@ internal object HelpEntries {
     """.trimIndent()
 
   val WifiThrottle =
-    """Android limits 1 scan every 30 seconds. To disable this throttling and scan every 5 seconds, enable Developer options in your phone's settings and turn off "WiFi scan throttling"."""
+    """Android limits 1 scan every 30 seconds. To disable this throttling and scan every 5 seconds, enable Developer options in your phone's settings and turn off "Wi-Fi scan throttling"."""
 
   val ReconScreen =
     """Scans the local network you're connected to and lists the devices it finds, with the open ports and services on each. It combines direct port probing with mDNS and UPnP discovery, so it also catches devices that announce themselves, such as AirPlay, Chromecast, printers, and media servers."""

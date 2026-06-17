@@ -54,7 +54,7 @@ import dev.thomasbuilds.spectre.ui.SignalSource
 private fun titleFor(source: SignalSource): String =
   when (source) {
     SignalSource.CELLULAR -> "Cellular Towers"
-    SignalSource.WIFI -> "WiFi Access Points"
+    SignalSource.WIFI -> "Wi-Fi Access Points"
     SignalSource.BLUETOOTH -> "Bluetooth Devices"
     SignalSource.GNSS -> "GNSS Satellites"
   }
@@ -325,7 +325,7 @@ private fun DetailCardHeader(
             ) {
               Icon(
                 imageVector = Icons.Rounded.Tune,
-                contentDescription = "WiFi view options",
+                contentDescription = "Wi-Fi view options",
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(20.dp)
               )
@@ -699,7 +699,7 @@ private fun WifiThrottledTag() {
   }
   if (showDialog) {
     HelpDialog(
-      title = "WiFi scan throttling",
+      title = "Wi-Fi scan throttling",
       body = dev.thomasbuilds.spectre.ui.HelpEntries.WifiThrottle
     ) { showDialog = false }
   }
