@@ -151,7 +151,6 @@ private val GLOSSARY =
         e("SINR / SS-SINR", "Signal-to-Interference-plus-Noise Ratio. Higher means a cleaner signal."),
         e("SS-RSRP / CSI-RSRP", "5G forms of RSRP, measured on the synchronization signal or the CSI reference signal."),
         e("RSCP", "Received Signal Code Power: the 3G signal strength."),
-        e("Ec/No", "3G signal quality: useful energy versus noise."),
         e("SNR", "Signal-to-Noise Ratio of the channel."),
         e("CQI", "Channel Quality Indicator, the phone's own rating of the link from 0 to 15."),
         e("BER", "Bit Error Rate: the error level on a 2G channel."),
@@ -164,12 +163,17 @@ private val GLOSSARY =
       listOf(
         e("SSID", "The network name. Shown as Hidden when the network does not broadcast it."),
         e("BSSID", "The access point radio's MAC address. One physical router often runs several."),
+        e("Vendor", "The access point's hardware maker, from the OUI (the first half of the BSSID)."),
         e("Band", "2.4, 5, or 6 GHz. Higher bands are faster but carry less far."),
         e("Channel / Width", "Which slice of the band is used and how wide it is, from 20 up to 160 MHz. Wider is faster."),
         e("Center 0 / Center 1", "The center frequencies of a wide or split channel."),
         e(
           "Security",
           "The protection in use. WPA3 is strongest, then WPA2 and the older WPA; OWE encrypts otherwise-open networks; Open and WEP offer no real protection."
+        ),
+        e(
+          "Cipher",
+          "The encryption in use: CCMP (AES) on WPA2 and WPA3, GCMP-256 on WPA3 high-security, TKIP (deprecated), WEP (broken), or None on an open network."
         ),
         e("PSK / EAP", "How you authenticate: a Pre-Shared Key (a password) or EAP (enterprise login)."),
         e("WPS", "Wi-Fi Protected Setup, push-button or PIN pairing. Convenient but a well-known weak point."),
@@ -185,13 +189,24 @@ private val GLOSSARY =
       "Bluetooth",
       listOf(
         e("MAC", "The device's Bluetooth address. Most devices rotate a random one every few minutes for privacy."),
+        e(
+          "Vendor",
+          "The maker of the device's radio chip, from the OUI of its MAC. Blank for randomized addresses, which carry no real OUI."
+        ),
         e("RSSI", "Received signal strength, in dBm."),
         e("Adv TX power", "The transmit power the device claims it is broadcasting at."),
         e("iBeacon RSSI@1m", "The signal strength a beacon says it produces at 1 metre, used to estimate distance."),
         e("Address type", "Public (a permanent registered address), Random (a rotating privacy address), or Anonymous."),
         e("PHY", "The LE radio mode: 1M standard, 2M faster, or Coded for long range."),
         e("Service UUID", "Identifies a capability the device advertises (a GATT service)."),
-        e("Manufacturer / service data", "Vendor-specific data in the advertisement, used to identify the maker and product."),
+        e(
+          "Manufacturer / service data",
+          "Maker-specific data in the advertisement. Manufacturer is the brand from the Bluetooth SIG company ID, distinct from Vendor (the chip maker from the OUI)."
+        ),
+        e(
+          "Adv flags",
+          "The advertising flags byte: the device's discoverable mode and whether it supports classic Bluetooth, shown in hex."
+        ),
         e("iBeacon", "Apple's beacon format: a UUID plus major and minor numbers and a 1 metre power value."),
         e(
           "GATT",
@@ -212,6 +227,7 @@ private val GLOSSARY =
         e("Elevation", "Angle above the horizon, from 0 at the horizon to 90 directly overhead."),
         e("Azimuth", "Compass bearing to the satellite, where 0 is north."),
         e("Used in fix", "Whether this satellite is being used to compute your position."),
+        e("Position", "The point on the ground directly beneath the satellite (its sub-satellite point), in latitude and longitude."),
         e("Slant range", "Straight-line distance from you to the satellite."),
         e("Orbital altitude", "The satellite's height above the Earth's surface."),
         e(
