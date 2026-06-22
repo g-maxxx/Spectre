@@ -405,7 +405,7 @@ class GattInspector(
       if (status == BluetoothGatt.GATT_SUCCESS) {
         val decoded =
           runCatching { GattValueDecoder.decode(uuid, value) }
-            .getOrElse { value.joinToString(" ") { "%02x".format(it.toInt() and 0xff) } }
+            .getOrElse { bytesToHex(value) }
         values[uuid] = decoded
       }
       deliver(GattInspection.ReadingValues(mac, doneReads, totalReads))

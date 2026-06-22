@@ -369,73 +369,40 @@ class LanScanner(
       }
     }
 
+  private suspend fun <T> AsynchronousSocketChannel.awaitOp(start: (CompletionHandler<T, Any?>) -> Unit): T =
+    suspendCancellableCoroutine { cont ->
+      start(
+        object : CompletionHandler<T, Any?> {
+          override fun completed(
+            result: T,
+            attachment: Any?
+          ) = cont.resume(result)
+
+          override fun failed(
+            exc: Throwable,
+            attachment: Any?
+          ) = cont.resumeWithException(exc)
+        }
+      )
+      cont.invokeOnCancellation { runCatching { close() } }
+    }
+
   private suspend fun connectAsync(
     channel: AsynchronousSocketChannel,
     addr: InetSocketAddress
-  ) = suspendCancellableCoroutine<Unit> { cont ->
-    channel.connect(
-      addr,
-      null,
-      object : CompletionHandler<Void?, Any?> {
-        override fun completed(
-          result: Void?,
-          attachment: Any?
-        ) = cont.resume(Unit)
-
-        override fun failed(
-          exc: Throwable,
-          attachment: Any?
-        ) = cont.resumeWithException(exc)
-      }
-    )
-    cont.invokeOnCancellation { runCatching { channel.close() } }
+  ) {
+    channel.awaitOp<Void?> { handler -> channel.connect(addr, null, handler) }
   }
 
   private suspend fun writeAsync(
     channel: AsynchronousSocketChannel,
     buf: ByteBuffer
-  ): Int =
-    suspendCancellableCoroutine { cont ->
-      channel.write(
-        buf,
-        null,
-        object : CompletionHandler<Int, Any?> {
-          override fun completed(
-            result: Int,
-            attachment: Any?
-          ) = cont.resume(result)
-
-          override fun failed(
-            exc: Throwable,
-            attachment: Any?
-          ) = cont.resumeWithException(exc)
-        }
-      )
-      cont.invokeOnCancellation { runCatching { channel.close() } }
-    }
+  ): Int = channel.awaitOp { handler -> channel.write(buf, null, handler) }
 
   private suspend fun readAsync(
     channel: AsynchronousSocketChannel,
     buf: ByteBuffer
-  ): Int =
-    suspendCancellableCoroutine { cont ->
-      channel.read(
-        buf,
-        null,
-        object : CompletionHandler<Int, Any?> {
-          override fun completed(
-            result: Int,
-            attachment: Any?
-          ) = cont.resume(result)
-
-          override fun failed(
-            exc: Throwable,
-            attachment: Any?
-          ) = cont.resumeWithException(exc)
-        }
-      )
-      cont.invokeOnCancellation { runCatching { channel.close() } }
-    }
+  ): Int = channel.awaitOp { handler -> channel.read(buf, null, handler) }
 
   private fun isPolicyBlock(error: Throwable): Boolean {
     var cause: Throwable? = error

@@ -18,9 +18,9 @@ object GattValueDecoder {
       "2a19" -> "${bytes[0].toInt() and 0xff}%"
       "2a37" -> heartRate(bytes)
       "2a38" -> bodySensorLocation(bytes[0].toInt() and 0xff)
-      "2a6d" -> "${bytes.uint32le() / 10.0} Pa"
-      "2a6e" -> "${bytes.int16le() / 100.0} °C"
-      "2a6f" -> "${bytes.uint16le() / 100.0} %RH"
+      "2a6d" -> if (bytes.size >= 4) "${bytes.uint32le() / 10.0} Pa" else bytes.toHex()
+      "2a6e" -> if (bytes.size >= 2) "${bytes.int16le() / 100.0} °C" else bytes.toHex()
+      "2a6f" -> if (bytes.size >= 2) "${bytes.uint16le() / 100.0} %RH" else bytes.toHex()
       "2af9" -> "${bytes[0].toInt() and 0xff}%"
       else -> bytes.preview()
     }

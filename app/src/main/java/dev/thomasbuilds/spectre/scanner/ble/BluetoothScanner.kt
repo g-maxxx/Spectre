@@ -15,6 +15,7 @@ import android.util.Log
 import androidx.core.util.isNotEmpty
 import androidx.core.util.size
 import dev.thomasbuilds.spectre.analysis.Distance
+import dev.thomasbuilds.spectre.analysis.smoothRssi
 import dev.thomasbuilds.spectre.hasPermission
 import dev.thomasbuilds.spectre.model.BluetoothSignal
 import dev.thomasbuilds.spectre.model.BluetoothSourceState
@@ -134,12 +135,7 @@ class BluetoothScanner(
     if (rssi > 20 || rssi < -127) return
     val previous = deviceCache[mac]
     val sampleCount = (previous?.sampleCount ?: 0) + 1
-    val smoothedRssi =
-      if (previous == null) {
-        rssi.toDouble()
-      } else {
-        EMA_ALPHA * rssi + (1 - EMA_ALPHA) * previous.smoothedRssi
-      }
+    val smoothedRssi = smoothRssi(previous?.smoothedRssi, rssi)
     val advName = result.scanRecord?.deviceName?.takeIf { it.isNotBlank() }
     val name: String
     val nameIpcAttempted: Boolean
@@ -495,7 +491,6 @@ class BluetoothScanner(
   private companion object {
     const val TAG = "BluetoothScanner"
     const val UNKNOWN_NAME = "Unknown"
-    const val EMA_ALPHA = 0.3
     const val MIN_SAMPLES_FOR_DISTANCE = 3
 
     const val STALE_TTL_MS = 30_000L

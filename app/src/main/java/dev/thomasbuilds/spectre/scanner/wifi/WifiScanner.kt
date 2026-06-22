@@ -12,6 +12,7 @@ import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
 import dev.thomasbuilds.spectre.analysis.Distance
+import dev.thomasbuilds.spectre.analysis.smoothRssi
 import dev.thomasbuilds.spectre.hasPermission
 import dev.thomasbuilds.spectre.model.DetailEntry
 import dev.thomasbuilds.spectre.model.DistanceConfidence
@@ -274,12 +275,7 @@ class WifiScanner(
         return@forEach
       }
       val sampleCount = (previous?.sampleCount ?: 0) + 1
-      val smoothedRssi =
-        if (previous == null) {
-          sanitized.toDouble()
-        } else {
-          EMA_ALPHA * sanitized + (1 - EMA_ALPHA) * previous.smoothedRssi
-        }
+      val smoothedRssi = smoothRssi(previous?.smoothedRssi, sanitized)
 
       val isConnected =
         connectedBssid != null &&
@@ -386,7 +382,6 @@ class WifiScanner(
     }
 
   private companion object {
-    const val EMA_ALPHA = 0.3
     const val MIN_SAMPLES_FOR_DISTANCE = 2
     const val STALE_SCAN_MISSES = 3
     const val WIFI_PROBE_INTERVAL_UNTHROTTLED_MS = 5_000L
