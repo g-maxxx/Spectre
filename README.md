@@ -4,23 +4,23 @@
 
 ## Installation
 
-Minimum supported version: Android 12 (API 31)
+**Minimum supported version: Android 12 (API 31)**
 
-1. Download the APK from the [GitHub release](https://github.com/thomasbuilds/Spectre/releases/latest)
-2. Optionally verify the APK's signing certificate against the [CERT.sha256](CERT.sha256) fingerprint on the release
-3. Open the file on your phone and allow installation from unknown sources when Android prompts you
-4. Launch Spectre and grant the permissions it requests
+1. Download the APK from the [GitHub release](https://github.com/thomasbuilds/Spectre/releases/latest).
+2. Optionally verify the APK's signing certificate against the [CERT.sha256](CERT.sha256) fingerprint on the release.
+3. Open the file on your phone and allow installation from unknown sources when Android prompts you.
+4. Launch Spectre and grant the permissions it requests.
 
 ## Features
 
-- **Live RF exposure gauge:** A single dBm figure for the total received RF power across cellular, Wi-Fi, and Bluetooth
-- **Cellular:** Serving and neighbor cells on 5G, 4G, 3G, and 2G with operator, identifiers, bands, reference measurements, and a timing-advance distance estimate where available
-- **Wi-Fi:** Access points on the 2.4, 5, and 6 GHz bands with vendor, security, cipher, channel, width, and a distance estimate (true 802.11mc FTM ranging where the hardware supports it)
-- **Bluetooth LE:** Advertising devices with name, MAC, vendor, RSSI, address type, PHY, service UUIDs, and decoded manufacturer data including iBeacon
-- **GNSS:** Multi-constellation tracking with dual-frequency support, carrier-to-noise, elevation, azimuth, used-in-fix status, and a computed sub-satellite ground point
-- **Local-network scan:** Host discovery via TCP-connect probes and SSDP / UPnP, with banner grabbing, service fingerprinting, and reverse DNS, plus mDNS / DNS-SD service discovery
-- **GATT inspector:** Connect to a BLE device, enumerate its services and characteristics, read and decode their values, and write to writable ones
-- **iBeacon broadcast:** Broadcast as an iBeacon with configurable UUID, major, minor, and measured power
+- **Live RF exposure gauge:** A single dBm figure for the total received RF power across cellular, Wi-Fi, and Bluetooth.
+- **Cellular:** Serving and neighbor cells on 5G, 4G, 3G, and 2G with operator, identifiers, bands, reference measurements, and a timing-advance distance estimate where available.
+- **Wi-Fi:** Access points on the 2.4, 5, and 6 GHz bands with vendor, security, cipher, channel, width, and a distance estimate (true 802.11mc FTM ranging where the hardware supports it).
+- **Bluetooth LE:** Advertising devices with name, MAC, vendor, RSSI, address type, PHY, service UUIDs, and decoded manufacturer data including iBeacon.
+- **GNSS:** Multi-constellation tracking with dual-frequency support, carrier-to-noise, elevation, azimuth, used-in-fix status, and a computed sub-satellite ground point.
+- **Local-network scan:** Host discovery via TCP-connect probes and SSDP / UPnP, with banner grabbing, service fingerprinting, and reverse DNS, plus mDNS / DNS-SD service discovery.
+- **GATT inspector:** Connect to a BLE device, enumerate its services and characteristics, read and decode their values, and write to writable ones.
+- **iBeacon broadcast:** Broadcast as an iBeacon with configurable UUID, major, minor, and measured power.
 
 ## Android limitations
 
@@ -38,7 +38,7 @@ Minimum supported version: Android 12 (API 31)
 
 ## Sponsor
 
-Spectre is free and ad-free. Donations toward its continued development are very welcome.
+Spectre is free, open-source, and ad-free. Donations toward its continued development are very welcome.
 
 - Bitcoin: `bc1qphgd8leqsf06qlm6jjxpuw2rtq9f9hdjnhfluh`
 - Monero: `85fzziWM1pH77HWHNhE6aAN9uaHrLL7CMFA72rVecmMDR1fUjfv9YmS6GGeiV3hDEn7e9d8v4hfMSRmmEp171fpR4nipNfZ`
