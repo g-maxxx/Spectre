@@ -1,5 +1,6 @@
 package dev.thomasbuilds.spectre.model
 
+import android.os.Build
 import androidx.compose.runtime.Immutable
 
 enum class CellNetworkType(
@@ -62,6 +63,19 @@ data class WifiSignal(
   val isStale: Boolean = false
 )
 
+enum class BleAddressType(
+  val label: String
+) {
+  PUBLIC("Public"),
+  RANDOM("Random"),
+  ANONYMOUS("Anonymous");
+
+  companion object {
+    val supported: Boolean
+      get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+  }
+}
+
 @Immutable
 data class BluetoothSignal(
   val name: String,
@@ -74,7 +88,8 @@ data class BluetoothSignal(
   val advertisementHex: String? = null,
   val firstSeenMs: Long = 0L,
   val isConnectable: Boolean = false,
-  val isStale: Boolean = false
+  val isStale: Boolean = false,
+  val addressType: BleAddressType? = null
 )
 
 enum class Constellation(

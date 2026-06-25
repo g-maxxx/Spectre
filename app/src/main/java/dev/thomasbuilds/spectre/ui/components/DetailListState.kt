@@ -44,6 +44,7 @@ class DetailListState(
   btSort: BluetoothSort = BluetoothSort.DBM,
   btManufacturerFilter: String = "",
   btFilterMode: FilterMode = FilterMode.INCLUDE,
+  btAddressTypes: List<String> = emptyList(),
   wifiSort: WifiSort = WifiSort.SIGNAL,
   wifiBandNames: List<String> = emptyList(),
   wifiSecurityNames: List<String> = emptyList(),
@@ -54,6 +55,7 @@ class DetailListState(
   var btSort by mutableStateOf(btSort)
   var btManufacturerFilter by mutableStateOf(btManufacturerFilter)
   var btFilterMode by mutableStateOf(btFilterMode)
+  var btAddressTypes by mutableStateOf(btAddressTypes)
   var btSheetOpen by mutableStateOf(false)
   var bleAdvertiseSheetOpen by mutableStateOf(false)
   var btFrozenList by mutableStateOf<List<BluetoothSignal>?>(null)
@@ -79,7 +81,8 @@ class DetailListState(
             it.wifiSecurityNames.joinToString(","),
             it.wifiWpsFilter.name,
             it.wifiVendorFilter,
-            it.wifiVendorFilterMode.name
+            it.wifiVendorFilterMode.name,
+            it.btAddressTypes.joinToString(",")
           )
         },
         restore = {
@@ -92,7 +95,8 @@ class DetailListState(
             wifiSecurityNames = it[5].split(",").filter { s -> s.isNotEmpty() },
             wifiWpsFilter = WifiWpsFilter.valueOf(it[6]),
             wifiVendorFilter = it[7],
-            wifiVendorFilterMode = FilterMode.valueOf(it[8])
+            wifiVendorFilterMode = FilterMode.valueOf(it[8]),
+            btAddressTypes = it[9].split(",").filter { s -> s.isNotEmpty() }
           )
         }
       )

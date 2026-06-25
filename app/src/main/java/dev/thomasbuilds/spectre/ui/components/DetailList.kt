@@ -144,7 +144,7 @@ fun LazyListScope.detailListSection(
     SignalSource.BLUETOOTH -> {
       val visible = if (showStaleBluetooth) state.bluetooth else state.bluetooth.filterNot { it.isStale }
       val filterTokens = parseFilterTokens(holder.btManufacturerFilter)
-      val filtered =
+      val manuFiltered =
         if (filterTokens.isEmpty()) {
           visible
         } else {
@@ -152,6 +152,12 @@ fun LazyListScope.detailListSection(
             FilterMode.INCLUDE -> visible.filter { matchesDetailFilter(it.details, filterTokens, "Manufacturer") }
             FilterMode.EXCLUDE -> visible.filterNot { matchesDetailFilter(it.details, filterTokens, "Manufacturer") }
           }
+        }
+      val filtered =
+        if (holder.btAddressTypes.isEmpty()) {
+          manuFiltered
+        } else {
+          manuFiltered.filter { it.addressType?.name in holder.btAddressTypes }
         }
       val sorted =
         when (holder.btSort) {
@@ -167,7 +173,12 @@ fun LazyListScope.detailListSection(
         } else {
           sorted
         }
-      val summary = if (filterTokens.isNotEmpty()) "Showing ${filtered.size} of ${visible.size}" else null
+      val summary =
+        if (filterTokens.isNotEmpty() || holder.btAddressTypes.isNotEmpty()) {
+          "Showing ${filtered.size} of ${visible.size}"
+        } else {
+          null
+        }
       item(key = "detail-header", contentType = "detailHeader") {
         DetailCardHeader(source, state, holder, summary)
       }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.FilterAlt
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Lock
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import dev.thomasbuilds.spectre.model.BleAddressType
 import dev.thomasbuilds.spectre.model.WifiBand
 import dev.thomasbuilds.spectre.model.WifiSecurity
 import dev.thomasbuilds.spectre.scanner.ble.BleAdvertiser
@@ -72,6 +74,10 @@ fun DetailListSheets(
   }
 
   if (holder.btSheetOpen && source == SignalSource.BLUETOOTH) {
+    val selectedAddressTypes =
+      remember(holder.btAddressTypes) {
+        holder.btAddressTypes.mapNotNullTo(linkedSetOf()) { n -> BleAddressType.entries.firstOrNull { it.name == n } }
+      }
     BluetoothFilterSheet(
       currentSort = holder.btSort,
       onSortChange = { holder.btSort = it },
@@ -79,6 +85,11 @@ fun DetailListSheets(
       onManufacturerFilterChange = { holder.btManufacturerFilter = it },
       filterMode = holder.btFilterMode,
       onFilterModeChange = { holder.btFilterMode = it },
+      selectedAddressTypes = selectedAddressTypes,
+      onAddressTypeToggle = { type ->
+        holder.btAddressTypes =
+          if (type.name in holder.btAddressTypes) holder.btAddressTypes - type.name else holder.btAddressTypes + type.name
+      },
       showStale = showStaleBluetooth,
       onShowStaleChange = onSetShowStaleBluetooth,
       onDismiss = { holder.btSheetOpen = false }
@@ -245,6 +256,8 @@ private fun BluetoothFilterSheet(
   onManufacturerFilterChange: (String) -> Unit,
   filterMode: FilterMode,
   onFilterModeChange: (FilterMode) -> Unit,
+  selectedAddressTypes: Set<BleAddressType>,
+  onAddressTypeToggle: (BleAddressType) -> Unit,
   showStale: Boolean,
   onShowStaleChange: (Boolean) -> Unit,
   onDismiss: () -> Unit
@@ -277,6 +290,22 @@ private fun BluetoothFilterSheet(
               colors = filterChipColors(),
               border = filterChipBorder(option == currentSort)
             )
+          }
+        }
+      }
+
+      if (BleAddressType.supported) {
+        SheetSection(icon = Icons.Rounded.Fingerprint, label = "Address type") {
+          FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BleAddressType.entries.forEach { type ->
+              FilterChip(
+                selected = type in selectedAddressTypes,
+                onClick = { onAddressTypeToggle(type) },
+                label = { Text(type.label) },
+                colors = filterChipColors(),
+                border = filterChipBorder(type in selectedAddressTypes)
+              )
+            }
           }
         }
       }

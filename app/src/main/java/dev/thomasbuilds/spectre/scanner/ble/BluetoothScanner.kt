@@ -10,13 +10,13 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.location.LocationManager
-import android.os.Build
 import android.util.Log
 import androidx.core.util.isNotEmpty
 import androidx.core.util.size
 import dev.thomasbuilds.spectre.analysis.Distance
 import dev.thomasbuilds.spectre.analysis.smoothRssi
 import dev.thomasbuilds.spectre.hasPermission
+import dev.thomasbuilds.spectre.model.BleAddressType
 import dev.thomasbuilds.spectre.model.BluetoothSignal
 import dev.thomasbuilds.spectre.model.BluetoothSourceState
 import dev.thomasbuilds.spectre.model.DetailEntry
@@ -229,6 +229,7 @@ class BluetoothScanner(
       }
 
     val addressType = addressTypeOrNull(result.device)
+    val bleAddressType = bleAddressType(addressType)
     val details =
       buildList {
         add(DetailEntry("Name", name))
@@ -247,7 +248,7 @@ class BluetoothScanner(
         val connectableLabel =
           if (alternates) "${result.isConnectable} (alternates)" else result.isConnectable.toString()
         add(DetailEntry("Connectable", connectableLabel))
-        addressTypeLabel(addressType)?.let { add(DetailEntry("Address type", it)) }
+        bleAddressType?.let { add(DetailEntry("Address type", it.label)) }
         result.primaryPhy.takeIf { it != 0 }?.let { add(DetailEntry("Primary PHY", phyLabel(it))) }
         result.secondaryPhy.takeIf { it != 0 }?.let { add(DetailEntry("Secondary PHY", phyLabel(it))) }
         result.scanRecord?.serviceUuids?.takeIf { it.isNotEmpty() }?.let { uuids ->
@@ -298,7 +299,8 @@ class BluetoothScanner(
       advertisementHex = result.scanRecord?.let { advertisementHexBlock(it, companies) },
       firstSeenMs = state.firstSeenMs,
       isConnectable = result.isConnectable,
-      isStale = isStale
+      isStale = isStale,
+      addressType = bleAddressType
     )
   }
 
@@ -352,7 +354,15 @@ class BluetoothScanner(
         .Builder()
         .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
         .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
-        .build()
+        .apply {
+          // Default scanning is legacy-only; opt into extended + all PHYs where the radio
+          // supports it so BLE 5 extended, long-range (Coded PHY), and anonymous advertisers
+          // are also seen, not just classic 4.2 advertisements.
+          if (a.isLeExtendedAdvertisingSupported) {
+            setLegacy(false)
+            setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
+          }
+        }.build()
     try {
       scanner.startScan(null, settings, callback)
       scanning = true
@@ -468,15 +478,15 @@ class BluetoothScanner(
 
   @SuppressLint("MissingPermission")
   private fun addressTypeOrNull(device: BluetoothDevice?): Int? {
-    if (device == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return null
+    if (device == null || !BleAddressType.supported) return null
     return runCatching { device.addressType }.getOrNull()
   }
 
-  private fun addressTypeLabel(type: Int?): String? =
+  private fun bleAddressType(type: Int?): BleAddressType? =
     when (type) {
-      BluetoothDevice.ADDRESS_TYPE_PUBLIC -> "Public"
-      BluetoothDevice.ADDRESS_TYPE_RANDOM -> "Random"
-      BluetoothDevice.ADDRESS_TYPE_ANONYMOUS -> "Anonymous"
+      BluetoothDevice.ADDRESS_TYPE_PUBLIC -> BleAddressType.PUBLIC
+      BluetoothDevice.ADDRESS_TYPE_RANDOM -> BleAddressType.RANDOM
+      BluetoothDevice.ADDRESS_TYPE_ANONYMOUS -> BleAddressType.ANONYMOUS
       else -> null
     }
 
