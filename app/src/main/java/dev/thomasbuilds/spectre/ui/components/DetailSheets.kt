@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.FilterAlt
@@ -107,6 +109,10 @@ fun DetailListSheets(
       },
       wpsFilter = holder.wifiWpsFilter,
       onWpsFilterChange = { holder.wifiWpsFilter = it },
+      vendorFilter = holder.wifiVendorFilter,
+      onVendorFilterChange = { holder.wifiVendorFilter = it },
+      vendorFilterMode = holder.wifiVendorFilterMode,
+      onVendorFilterModeChange = { holder.wifiVendorFilterMode = it },
       showStale = showStaleWifi,
       onShowStaleChange = onSetShowStaleWifi,
       onDismiss = { holder.wifiSheetOpen = false }
@@ -147,6 +153,7 @@ private fun BleAdvertiseSheet(
         Modifier
           .fillMaxWidth()
           .imePadding()
+          .verticalScroll(rememberScrollState())
           .padding(horizontal = 20.dp)
           .padding(top = 8.dp, bottom = 28.dp),
       verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -236,8 +243,8 @@ private fun BluetoothFilterSheet(
   onSortChange: (BluetoothSort) -> Unit,
   manufacturerFilter: String,
   onManufacturerFilterChange: (String) -> Unit,
-  filterMode: BluetoothFilterMode,
-  onFilterModeChange: (BluetoothFilterMode) -> Unit,
+  filterMode: FilterMode,
+  onFilterModeChange: (FilterMode) -> Unit,
   showStale: Boolean,
   onShowStaleChange: (Boolean) -> Unit,
   onDismiss: () -> Unit
@@ -255,6 +262,7 @@ private fun BluetoothFilterSheet(
         Modifier
           .fillMaxWidth()
           .imePadding()
+          .verticalScroll(rememberScrollState())
           .padding(horizontal = 20.dp)
           .padding(top = 8.dp, bottom = 28.dp),
       verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -275,7 +283,7 @@ private fun BluetoothFilterSheet(
 
       SheetSection(icon = Icons.Rounded.FilterAlt, label = "Manufacturer filter") {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          BluetoothFilterMode.entries.forEach { mode ->
+          FilterMode.entries.forEach { mode ->
             FilterChip(
               selected = mode == filterMode,
               onClick = { onFilterModeChange(mode) },
@@ -348,6 +356,10 @@ private fun WifiFilterSheet(
   onSecurityToggle: (WifiSecurity) -> Unit,
   wpsFilter: WifiWpsFilter,
   onWpsFilterChange: (WifiWpsFilter) -> Unit,
+  vendorFilter: String,
+  onVendorFilterChange: (String) -> Unit,
+  vendorFilterMode: FilterMode,
+  onVendorFilterModeChange: (FilterMode) -> Unit,
   showStale: Boolean,
   onShowStaleChange: (Boolean) -> Unit,
   onDismiss: () -> Unit
@@ -365,6 +377,7 @@ private fun WifiFilterSheet(
         Modifier
           .fillMaxWidth()
           .imePadding()
+          .verticalScroll(rememberScrollState())
           .padding(horizontal = 20.dp)
           .padding(top = 8.dp, bottom = 28.dp),
       verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -381,6 +394,61 @@ private fun WifiFilterSheet(
             )
           }
         }
+      }
+
+      SheetSection(icon = Icons.Rounded.FilterAlt, label = "Vendor filter") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          FilterMode.entries.forEach { mode ->
+            FilterChip(
+              selected = mode == vendorFilterMode,
+              onClick = { onVendorFilterModeChange(mode) },
+              label = { Text(mode.label) },
+              colors = filterChipColors(),
+              border = filterChipBorder(mode == vendorFilterMode)
+            )
+          }
+        }
+        Box(
+          modifier =
+            Modifier
+              .fillMaxWidth()
+              .border(
+                1.dp,
+                MaterialTheme.colorScheme.outline,
+                RoundedCornerShape(10.dp)
+              ).padding(horizontal = 14.dp, vertical = 12.dp)
+        ) {
+          androidx.compose.foundation.text.BasicTextField(
+            value = vendorFilter,
+            onValueChange = onVendorFilterChange,
+            singleLine = true,
+            textStyle =
+              MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface
+              ),
+            cursorBrush =
+              androidx.compose.ui.graphics.SolidColor(
+                MaterialTheme.colorScheme.primary
+              ),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+              if (vendorFilter.isEmpty()) {
+                Text(
+                  "cisco, netgear, tp-link",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+              }
+              inner()
+            }
+          )
+        }
+        Text(
+          "Use commas to filter several vendors at once. Matches the access point maker from its BSSID (e.g. Cisco, Ubiquiti).",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          modifier = Modifier.padding(top = 2.dp, start = 4.dp)
+        )
       }
 
       SheetSection(icon = Icons.Rounded.Wifi, label = "Band") {

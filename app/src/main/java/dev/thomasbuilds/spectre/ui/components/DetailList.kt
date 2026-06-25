@@ -149,8 +149,8 @@ fun LazyListScope.detailListSection(
           visible
         } else {
           when (holder.btFilterMode) {
-            BluetoothFilterMode.INCLUDE -> visible.filter { matchesManufacturerFilter(it.details, filterTokens) }
-            BluetoothFilterMode.EXCLUDE -> visible.filterNot { matchesManufacturerFilter(it.details, filterTokens) }
+            FilterMode.INCLUDE -> visible.filter { matchesDetailFilter(it.details, filterTokens, "Manufacturer") }
+            FilterMode.EXCLUDE -> visible.filterNot { matchesDetailFilter(it.details, filterTokens, "Manufacturer") }
           }
         }
       val sorted =
@@ -245,13 +245,22 @@ private fun wifiMatches(
       WifiWpsFilter.ONLY_WPS -> ap.hasWps
       WifiWpsFilter.ONLY_NON_WPS -> !ap.hasWps
     }
-  return bandOk && secOk && wpsOk
+  val vendorTokens = parseFilterTokens(holder.wifiVendorFilter)
+  val vendorOk =
+    if (vendorTokens.isEmpty()) {
+      true
+    } else {
+      val match = matchesDetailFilter(ap.details, vendorTokens, "Vendor")
+      if (holder.wifiVendorFilterMode == FilterMode.EXCLUDE) !match else match
+    }
+  return bandOk && secOk && wpsOk && vendorOk
 }
 
 private fun wifiAnyFilterActive(holder: DetailListState): Boolean =
   holder.wifiBandNames.isNotEmpty() ||
     holder.wifiSecurityNames.isNotEmpty() ||
-    holder.wifiWpsFilter != WifiWpsFilter.ANY
+    holder.wifiWpsFilter != WifiWpsFilter.ANY ||
+    parseFilterTokens(holder.wifiVendorFilter).isNotEmpty()
 
 @Composable
 private fun DetailCardHeader(
@@ -424,17 +433,18 @@ private fun parseFilterTokens(input: String): List<String> =
     .map { it.trim().lowercase() }
     .filter { it.isNotBlank() }
 
-private fun matchesManufacturerFilter(
+private fun matchesDetailFilter(
   details: List<DetailEntry>,
-  tokens: List<String>
+  tokens: List<String>,
+  label: String
 ): Boolean {
-  val manuEntry =
+  val value =
     details
-      .firstOrNull { it.label == "Manufacturer" }
+      .firstOrNull { it.label == label }
       ?.value
       ?.lowercase()
       ?: return false
-  return tokens.any { it in manuEntry }
+  return tokens.any { it in value }
 }
 
 @Composable

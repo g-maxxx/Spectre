@@ -17,7 +17,7 @@ enum class BluetoothSort(
   DETECTION("Detection order")
 }
 
-enum class BluetoothFilterMode(
+enum class FilterMode(
   val label: String
 ) {
   INCLUDE("Include"),
@@ -43,11 +43,13 @@ enum class WifiWpsFilter(
 class DetailListState(
   btSort: BluetoothSort = BluetoothSort.DBM,
   btManufacturerFilter: String = "",
-  btFilterMode: BluetoothFilterMode = BluetoothFilterMode.INCLUDE,
+  btFilterMode: FilterMode = FilterMode.INCLUDE,
   wifiSort: WifiSort = WifiSort.SIGNAL,
   wifiBandNames: List<String> = emptyList(),
   wifiSecurityNames: List<String> = emptyList(),
-  wifiWpsFilter: WifiWpsFilter = WifiWpsFilter.ANY
+  wifiWpsFilter: WifiWpsFilter = WifiWpsFilter.ANY,
+  wifiVendorFilter: String = "",
+  wifiVendorFilterMode: FilterMode = FilterMode.INCLUDE
 ) {
   var btSort by mutableStateOf(btSort)
   var btManufacturerFilter by mutableStateOf(btManufacturerFilter)
@@ -60,6 +62,8 @@ class DetailListState(
   var wifiBandNames by mutableStateOf(wifiBandNames)
   var wifiSecurityNames by mutableStateOf(wifiSecurityNames)
   var wifiWpsFilter by mutableStateOf(wifiWpsFilter)
+  var wifiVendorFilter by mutableStateOf(wifiVendorFilter)
+  var wifiVendorFilterMode by mutableStateOf(wifiVendorFilterMode)
   var wifiSheetOpen by mutableStateOf(false)
 
   companion object {
@@ -73,18 +77,22 @@ class DetailListState(
             it.wifiSort.name,
             it.wifiBandNames.joinToString(","),
             it.wifiSecurityNames.joinToString(","),
-            it.wifiWpsFilter.name
+            it.wifiWpsFilter.name,
+            it.wifiVendorFilter,
+            it.wifiVendorFilterMode.name
           )
         },
         restore = {
           DetailListState(
             btSort = BluetoothSort.valueOf(it[0]),
             btManufacturerFilter = it[1],
-            btFilterMode = BluetoothFilterMode.valueOf(it[2]),
+            btFilterMode = FilterMode.valueOf(it[2]),
             wifiSort = WifiSort.valueOf(it[3]),
             wifiBandNames = it[4].split(",").filter { s -> s.isNotEmpty() },
             wifiSecurityNames = it[5].split(",").filter { s -> s.isNotEmpty() },
-            wifiWpsFilter = WifiWpsFilter.valueOf(it[6])
+            wifiWpsFilter = WifiWpsFilter.valueOf(it[6]),
+            wifiVendorFilter = it[7],
+            wifiVendorFilterMode = FilterMode.valueOf(it[8])
           )
         }
       )
