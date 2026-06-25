@@ -170,13 +170,6 @@ private fun BleAdvertiseSheet(
       verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
       SheetSection(icon = Icons.Rounded.Campaign, label = "iBeacon broadcast") {
-        if (!advertiser.isSupported()) {
-          Text(
-            "This device can't BLE-advertise.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error
-          )
-        }
         OutlinedTextField(
           value = uuid,
           onValueChange = { uuid = it },

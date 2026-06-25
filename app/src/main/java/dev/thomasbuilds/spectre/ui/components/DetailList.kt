@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,6 +50,7 @@ import dev.thomasbuilds.spectre.model.DistanceConfidence
 import dev.thomasbuilds.spectre.model.GnssSignal
 import dev.thomasbuilds.spectre.model.ScanState
 import dev.thomasbuilds.spectre.model.WifiSignal
+import dev.thomasbuilds.spectre.scanner.ble.BleAdvertiser
 import dev.thomasbuilds.spectre.ui.SignalSource
 
 private fun titleFor(source: SignalSource): String =
@@ -274,6 +276,12 @@ private fun wifiAnyFilterActive(holder: DetailListState): Boolean =
     parseFilterTokens(holder.wifiVendorFilter).isNotEmpty()
 
 @Composable
+private fun rememberBleAdvertiseSupported(): Boolean {
+  val context = LocalContext.current
+  return remember { BleAdvertiser(context).isSupported() }
+}
+
+@Composable
 private fun DetailCardHeader(
   source: SignalSource,
   state: ScanState,
@@ -308,16 +316,18 @@ private fun DetailCardHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
           ) {
-            IconButton(
-              onClick = { holder.bleAdvertiseSheetOpen = true },
-              modifier = Modifier.size(32.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Rounded.Campaign,
-                contentDescription = "Broadcast a BLE beacon",
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp)
-              )
+            if (rememberBleAdvertiseSupported()) {
+              IconButton(
+                onClick = { holder.bleAdvertiseSheetOpen = true },
+                modifier = Modifier.size(32.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Campaign,
+                  contentDescription = "Broadcast a BLE beacon",
+                  tint = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
             }
             IconButton(
               onClick = { holder.btSheetOpen = true },
