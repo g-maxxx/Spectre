@@ -224,12 +224,28 @@ private val GLOSSARY =
         ),
         e("SV / SVID", "Space Vehicle ID, the satellite's number within its constellation."),
         e("C/N0 (dB-Hz)", "Carrier-to-noise density, the satellite's signal quality. Around 40 and above is strong."),
+        e(
+          "Baseband C/N0",
+          "A second C/N0 measured after the phone's radio front-end, so slightly lower than the antenna value. The gap reflects the receiver's own losses."
+        ),
         e("Elevation", "Angle above the horizon, from 0 at the horizon to 90 directly overhead."),
         e("Azimuth", "Compass bearing to the satellite, where 0 is north."),
-        e("Used in fix", "Whether this satellite is being used to compute your position."),
+        e(
+          "Range rate",
+          "How fast the distance to the satellite is changing, in metres per second, approaching as it rises and receding as it sets. It tracks the satellite's motion across the sky, not your own."
+        ),
         e("Position", "The point on the ground directly beneath the satellite (its sub-satellite point), in latitude and longitude."),
         e("Slant range", "Straight-line distance from you to the satellite."),
         e("Orbital altitude", "The satellite's height above the Earth's surface."),
+        e(
+          "Ephemeris data",
+          "Whether the receiver holds the satellite's precise orbit data, which it needs to use the satellite in a fix. A strong satellite without it is still downloading and not yet usable."
+        ),
+        e(
+          "Almanac data",
+          "Whether the receiver holds coarse, long-lived orbit data for the satellite, used to know roughly where to look for it."
+        ),
+        e("In fix", "Marks a band the receiver is actively using to compute your position."),
         e(
           "Bands (L1, L5, E1...)",
           "The carrier frequencies a satellite transmits on. Tracking two at once, dual-frequency, sharpens accuracy."
