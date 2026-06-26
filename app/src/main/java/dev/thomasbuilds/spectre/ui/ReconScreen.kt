@@ -1,5 +1,10 @@
 package dev.thomasbuilds.spectre.ui
 
+import android.Manifest
+import android.app.Activity
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import dev.thomasbuilds.spectre.hasPermission
 import dev.thomasbuilds.spectre.recon.HostInfo
 import dev.thomasbuilds.spectre.recon.LanScanner
 import dev.thomasbuilds.spectre.recon.MdnsBrowser
@@ -87,6 +93,65 @@ fun ReconScreen(onBack: () -> Unit) {
     }
   }
 
+  val startScan = {
+    hostsFlow.value = emptyList()
+    mdnsFlow.value = emptyList()
+    localBlocked = false
+    scanning = true
+    scanJob =
+      scope.launch {
+        val net = subnet ?: return@launch
+        val startMs = System.currentTimeMillis()
+        val hostJob =
+          launch {
+            scanner.scanHosts(net).collect { host ->
+              hostsFlow.update { list ->
+                (list.filterNot { it.ip == host.ip } + ReconMerge.mergeHost(list, host))
+                  .sortedBy { ReconMerge.ipToLong(it.ip) }
+              }
+            }
+          }
+        val mdnsJob =
+          launch {
+            mdnsScanner.discoverAll().collect { svc ->
+              mdnsFlow.update { it + svc }
+            }
+          }
+        val ssdpJob =
+          launch {
+            ssdpScanner.scan().collect { device ->
+              hostsFlow.update { list ->
+                (list.filterNot { it.ip == device.ip } + ReconMerge.mergeSsdp(list, device))
+                  .sortedBy { ReconMerge.ipToLong(it.ip) }
+              }
+            }
+          }
+        hostJob.join()
+        localBlocked = scanner.localAccessBlocked
+        ssdpJob.join()
+        val remaining = DISCOVERY_WINDOW_MS - (System.currentTimeMillis() - startMs)
+        if (remaining > 0) kotlinx.coroutines.delay(remaining)
+        mdnsJob.cancel()
+        scanning = false
+      }
+  }
+
+  val localNetworkLauncher =
+    rememberLauncherForActivityResult(
+      ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+      val firstDenied = results.entries.firstOrNull { !it.value }?.key
+      if (firstDenied == null) {
+        startScan()
+        return@rememberLauncherForActivityResult
+      }
+      val activity = context as? Activity
+      val canPromptAgain = activity?.shouldShowRequestPermissionRationale(firstDenied) == true
+      if (!canPromptAgain) {
+        openAppPermissionSettings(context)
+      }
+    }
+
   val insets = WindowInsets.safeDrawing.asPaddingValues()
   Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
     Column(modifier = Modifier.fillMaxSize().padding(insets)) {
@@ -119,46 +184,13 @@ fun ReconScreen(onBack: () -> Unit) {
           Button(
             enabled = !scanning && subnet != null,
             onClick = {
-              hostsFlow.value = emptyList()
-              mdnsFlow.value = emptyList()
-              localBlocked = false
-              scanning = true
-              scanJob =
-                scope.launch {
-                  val net = subnet ?: return@launch
-                  val startMs = System.currentTimeMillis()
-                  val hostJob =
-                    launch {
-                      scanner.scanHosts(net).collect { host ->
-                        hostsFlow.update { list ->
-                          (list.filterNot { it.ip == host.ip } + ReconMerge.mergeHost(list, host))
-                            .sortedBy { ReconMerge.ipToLong(it.ip) }
-                        }
-                      }
-                    }
-                  val mdnsJob =
-                    launch {
-                      mdnsScanner.discoverAll().collect { svc ->
-                        mdnsFlow.update { it + svc }
-                      }
-                    }
-                  val ssdpJob =
-                    launch {
-                      ssdpScanner.scan().collect { device ->
-                        hostsFlow.update { list ->
-                          (list.filterNot { it.ip == device.ip } + ReconMerge.mergeSsdp(list, device))
-                            .sortedBy { ReconMerge.ipToLong(it.ip) }
-                        }
-                      }
-                    }
-                  hostJob.join()
-                  localBlocked = scanner.localAccessBlocked
-                  ssdpJob.join()
-                  val remaining = DISCOVERY_WINDOW_MS - (System.currentTimeMillis() - startMs)
-                  if (remaining > 0) kotlinx.coroutines.delay(remaining)
-                  mdnsJob.cancel()
-                  scanning = false
-                }
+              if (Build.VERSION.SDK_INT < Build.VERSION_CODES.CINNAMON_BUN ||
+                context.hasPermission(Manifest.permission.ACCESS_LOCAL_NETWORK)
+              ) {
+                startScan()
+              } else {
+                localNetworkLauncher.launch(arrayOf(Manifest.permission.ACCESS_LOCAL_NETWORK))
+              }
             },
             modifier = Modifier.weight(1f)
           ) {

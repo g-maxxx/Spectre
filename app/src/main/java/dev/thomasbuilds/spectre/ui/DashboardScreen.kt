@@ -453,7 +453,7 @@ private fun permissionsForSource(source: SignalSource): Array<String> =
     }
   }
 
-private fun openAppPermissionSettings(context: Context) {
+internal fun openAppPermissionSettings(context: Context) {
   runCatching {
     context.startActivity(
       Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
