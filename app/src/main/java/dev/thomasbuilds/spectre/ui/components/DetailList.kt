@@ -689,18 +689,11 @@ private fun GnssHeader(g: GnssSignal) {
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface
       )
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-          "${g.cn0DbHz.toInt()} dBHz",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-          "·  el ${g.elevationDeg.toInt()}°",
-          style = MaterialTheme.typography.bodySmall,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-      }
+      Text(
+        "${g.cn0DbHz.toInt()} dBHz",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+      )
     }
   }
 }

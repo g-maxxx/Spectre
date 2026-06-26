@@ -3,6 +3,7 @@ package dev.thomasbuilds.spectre.scanner.gnss
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.location.GnssMeasurementsEvent
 import android.location.GnssStatus
 import android.location.LocationListener
 import android.location.LocationManager
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 class GnssScanner(
@@ -35,6 +37,11 @@ class GnssScanner(
   private var lastSatellites: List<GnssSignal> = emptyList()
 
   @Volatile
+  private var lastLocation: android.location.Location? = null
+
+  private val rangeRates = ConcurrentHashMap<Pair<Constellation, Int>, RangeReading>()
+
+  @Volatile
   private var registered = false
 
   private val _state = MutableStateFlow(GnssSourceState())
@@ -45,6 +52,11 @@ class GnssScanner(
 
   private val callbackExecutor = daemonExecutor("spectre-gnss")
 
+  private data class RangeReading(
+    val metersPerSecond: Float,
+    val atMs: Long
+  )
+
   private data class RawSatelliteEntry(
     val constellation: Constellation,
     val svid: Int,
@@ -53,12 +65,15 @@ class GnssScanner(
     val elevationDeg: Float,
     val azimuthDeg: Float,
     val usedInFix: Boolean,
+    val hasEphemeris: Boolean,
+    val hasAlmanac: Boolean,
     val carrierHz: Float?
   )
 
   private val callback =
     object : GnssStatus.Callback() {
       override fun onSatelliteStatusChanged(status: GnssStatus) {
+        val now = System.currentTimeMillis()
         val rawCount = status.satelliteCount
         val raw = ArrayList<RawSatelliteEntry>(rawCount)
         for (i in 0..<rawCount) {
@@ -71,19 +86,18 @@ class GnssScanner(
               elevationDeg = status.getElevationDegrees(i),
               azimuthDeg = status.getAzimuthDegrees(i),
               usedInFix = status.usedInFix(i),
+              hasEphemeris = status.hasEphemerisData(i),
+              hasAlmanac = status.hasAlmanacData(i),
               carrierHz = if (status.hasCarrierFrequencyHz(i)) status.getCarrierFrequencyHz(i) else null
             )
           )
         }
 
-        // A dual-frequency satellite appears once per band (L1, L5, ...); group by constellation
-        // and svid so it shows as a single row, headlined by its strongest band.
         val groups = raw.groupBy { it.constellation to it.svid }
         val merged =
           groups.values.map { group ->
-            val bestBand = group.maxBy { it.cn0DbHz }
             val bandsByCn0 = group.sortedByDescending { it.cn0DbHz }
-            val usedAnyBand = group.any { it.usedInFix }
+            val bestBand = bandsByCn0.first()
 
             val phoneLoc = lastLocation
             val subPoint =
@@ -106,8 +120,16 @@ class GnssScanner(
             val details =
               buildList {
                 add(DetailEntry("Constellation", bestBand.constellation.label))
+                add(DetailEntry("Elevation", "${"%.1f".format(bestBand.elevationDeg)}°"))
                 add(DetailEntry("Azimuth", "${"%.1f".format(bestBand.azimuthDeg)}°"))
-                add(DetailEntry("Used in fix", usedAnyBand.toString()))
+                val rateText =
+                  rangeRates[bestBand.constellation to bestBand.svid]
+                    ?.takeIf { now - it.atMs <= RANGE_RATE_STALE_MS }
+                    ?.let { reading ->
+                      val direction = if (reading.metersPerSecond < 0f) "approaching" else "receding"
+                      "${"%.0f".format(abs(reading.metersPerSecond))} m/s ($direction)"
+                    } ?: "Pending"
+                add(DetailEntry("Range rate", rateText))
                 if (subPoint != null) {
                   add(
                     DetailEntry(
@@ -130,11 +152,13 @@ class GnssScanner(
                 } else if (phoneLoc == null) {
                   add(DetailEntry("Position", "Pending"))
                 }
+                add(DetailEntry("Ephemeris data", if (bestBand.hasEphemeris) "Yes" else "No"))
+                add(DetailEntry("Almanac data", if (bestBand.hasAlmanac) "Yes" else "No"))
                 bandsByCn0.forEachIndexed { idx, b ->
                   val bandLabel =
-                    b.carrierHz?.let { GnssBands.bandName(b.constellation, it) }
-                      ?: b.carrierHz?.let { "${"%.0f".format(it / 1_000_000f)} MHz" }
-                      ?: "Band ${idx + 1}"
+                    b.carrierHz?.let { hz ->
+                      GnssBands.bandName(b.constellation, hz) ?: "${"%.0f".format(hz / 1_000_000f)} MHz"
+                    } ?: "Band ${idx + 1}"
                   val basebandStr = b.baseband?.let { " (baseband ${"%.1f".format(it)})" } ?: ""
                   val usedStr = if (b.usedInFix) " · in fix" else ""
                   add(DetailEntry(bandLabel, "${"%.1f".format(b.cn0DbHz)} dB-Hz$basebandStr$usedStr"))
@@ -154,7 +178,21 @@ class GnssScanner(
       }
     }
 
-  @Volatile private var lastLocation: android.location.Location? = null
+  private val measurementsCallback =
+    object : GnssMeasurementsEvent.Callback() {
+      override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
+        val clock = event.clock
+        if (!clock.hasDriftNanosPerSecond()) return
+        val driftMps = clock.driftNanosPerSecond * 1e-9 * SPEED_OF_LIGHT_MPS
+        val now = System.currentTimeMillis()
+        for (m in event.measurements) {
+          val geometric = m.pseudorangeRateMetersPerSecond - driftMps
+          rangeRates[GnssBands.constellationFor(m.constellationType) to m.svid] =
+            RangeReading(geometric.toFloat(), now)
+        }
+      }
+    }
+
   private val locationListener = LocationListener { loc -> lastLocation = loc }
 
   fun hasPermission(): Boolean = context.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -184,6 +222,7 @@ class GnssScanner(
             locationListener
           )
           lm.registerGnssStatusCallback(callbackExecutor, callback)
+          lm.registerGnssMeasurementsCallback(callbackExecutor, measurementsCallback)
         }.onSuccess {
           registered = true
         }.onFailure {
@@ -200,8 +239,10 @@ class GnssScanner(
   fun stop() {
     runCatching {
       lm?.unregisterGnssStatusCallback(callback)
+      lm?.unregisterGnssMeasurementsCallback(measurementsCallback)
       lm?.removeUpdates(locationListener)
     }
+    rangeRates.clear()
     registered = false
   }
 
@@ -234,5 +275,7 @@ class GnssScanner(
     const val GNSS_HEARTBEAT_MS = 5_000L
     const val GNSS_WARMUP_MS = 45_000L
     const val GNSS_STALENESS_MS = 20_000L
+    const val RANGE_RATE_STALE_MS = 5_000L
+    const val SPEED_OF_LIGHT_MPS = 299_792_458.0
   }
 }
