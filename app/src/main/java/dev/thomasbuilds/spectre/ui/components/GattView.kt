@@ -2,9 +2,7 @@ package dev.thomasbuilds.spectre.ui.components
 
 import android.bluetooth.BluetoothDevice
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -35,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -76,117 +73,111 @@ internal fun BluetoothExpandable(
     )
   }
 
-  Column(
-    modifier =
-      Modifier
-        .fillMaxWidth()
-        .alpha(if (device.isStale) STALE_ROW_ALPHA else 1f)
-        .clickable(onClick = onToggle)
-        .padding(vertical = 6.dp)
-  ) {
-    BtHeader(device)
-    AnimatedVisibility(visible = expanded) {
-      Column {
-        DetailsTable(device.details)
-        if (device.isConnectable || inspection !is GattInspection.Idle) {
-          Spacer(Modifier.height(8.dp))
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(
-              onClick = {
-                inspection = GattInspection.Connecting
-                inspector.inspect(device.mac, resolveBleDevice(device.mac)) { inspection = it }
-              },
-              enabled =
-                inspection !is GattInspection.Connecting &&
-                  inspection !is GattInspection.DiscoveringServices &&
-                  inspection !is GattInspection.ReadingValues
-            ) {
-              Text(
-                when (val s = inspection) {
-                  is GattInspection.Connecting -> {
-                    "Connecting…"
-                  }
-
-                  is GattInspection.DiscoveringServices -> {
-                    "Discovering…"
-                  }
-
-                  is GattInspection.ReadingValues -> {
-                    if (s.total == 0) "Reading…" else "Reading ${s.done}/${s.total}"
-                  }
-
-                  is GattInspection.Done -> {
-                    "Re-inspect"
-                  }
-
-                  else -> {
-                    "Inspect GATT"
-                  }
+  ExpandableRow(
+    expanded = expanded,
+    onClick = onToggle,
+    header = { BtHeader(device) },
+    details = device.details,
+    dimmed = device.isStale,
+    footer = {
+      if (device.isConnectable || inspection !is GattInspection.Idle) {
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          OutlinedButton(
+            onClick = {
+              inspection = GattInspection.Connecting
+              inspector.inspect(device.mac, resolveBleDevice(device.mac)) { inspection = it }
+            },
+            enabled =
+              inspection !is GattInspection.Connecting &&
+                inspection !is GattInspection.DiscoveringServices &&
+                inspection !is GattInspection.ReadingValues
+          ) {
+            Text(
+              when (val s = inspection) {
+                is GattInspection.Connecting -> {
+                  "Connecting…"
                 }
+
+                is GattInspection.DiscoveringServices -> {
+                  "Discovering…"
+                }
+
+                is GattInspection.ReadingValues -> {
+                  if (s.total == 0) "Reading…" else "Reading ${s.done}/${s.total}"
+                }
+
+                is GattInspection.Done -> {
+                  "Re-inspect"
+                }
+
+                else -> {
+                  "Inspect GATT"
+                }
+              }
+            )
+          }
+          Spacer(Modifier.width(8.dp))
+          when (val s = inspection) {
+            is GattInspection.Failed -> {
+              Text(
+                s.reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
               )
             }
-            Spacer(Modifier.width(8.dp))
-            when (val s = inspection) {
-              is GattInspection.Failed -> {
-                Text(
-                  s.reason,
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.error
-                )
-              }
 
-              is GattInspection.Done -> {
-                val readCount =
-                  s.services.sumOf { svc ->
-                    svc.characteristics.count { it.readValue != null }
-                  }
-                Text(
-                  "${s.services.size} services · $readCount values",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                IconButton(
-                  onClick = {
-                    val text =
-                      formatGattInspection(
-                        deviceName = device.name,
-                        deviceMac = device.mac,
-                        services = s.services,
-                        advertisementHex = device.advertisementHex
-                      )
-                    copyToClipboard(context, "GATT inspection", text)
-                    Toast
-                      .makeText(
-                        context,
-                        "GATT output copied",
-                        Toast.LENGTH_SHORT
-                      ).show()
-                  },
-                  modifier = Modifier.size(32.dp)
-                ) {
-                  Icon(
-                    imageVector = Icons.Rounded.ContentCopy,
-                    contentDescription = "Copy GATT output",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                  )
+            is GattInspection.Done -> {
+              val readCount =
+                s.services.sumOf { svc ->
+                  svc.characteristics.count { it.readValue != null }
                 }
-              }
-
-              else -> {
-                Unit
+              Text(
+                "${s.services.size} services · $readCount values",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+              )
+              IconButton(
+                onClick = {
+                  val text =
+                    formatGattInspection(
+                      deviceName = device.name,
+                      deviceMac = device.mac,
+                      services = s.services,
+                      advertisementHex = device.advertisementHex
+                    )
+                  copyToClipboard(context, "GATT inspection", text)
+                  Toast
+                    .makeText(
+                      context,
+                      "GATT output copied",
+                      Toast.LENGTH_SHORT
+                    ).show()
+                },
+                modifier = Modifier.size(32.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.ContentCopy,
+                  contentDescription = "Copy GATT output",
+                  tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.size(16.dp)
+                )
               }
             }
+
+            else -> {
+              Unit
+            }
           }
-          val done = inspection as? GattInspection.Done
-          if (done != null) {
-            Spacer(Modifier.height(6.dp))
-            GattServicesView(done.services, onWrite = { svc, ch -> writeTarget = svc to ch })
-          }
+        }
+        val done = inspection as? GattInspection.Done
+        if (done != null) {
+          Spacer(Modifier.height(6.dp))
+          GattServicesView(done.services, onWrite = { svc, ch -> writeTarget = svc to ch })
         }
       }
     }
-  }
+  )
 }
 
 @Composable

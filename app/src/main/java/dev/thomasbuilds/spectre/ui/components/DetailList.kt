@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -469,7 +470,7 @@ private fun matchesDetailFilter(
 }
 
 @Composable
-private fun ExpandableRow(
+internal fun ExpandableRow(
   expanded: Boolean,
   onClick: () -> Unit,
   header: @Composable () -> Unit,
@@ -482,8 +483,11 @@ private fun ExpandableRow(
       Modifier
         .fillMaxWidth()
         .alpha(if (dimmed) STALE_ROW_ALPHA else 1f)
-        .clickable(onClick = onClick)
-        .padding(vertical = 6.dp)
+        .clickable(
+          interactionSource = remember { MutableInteractionSource() },
+          indication = null,
+          onClick = onClick
+        ).padding(vertical = 6.dp)
   ) {
     header()
     AnimatedVisibility(visible = expanded) {

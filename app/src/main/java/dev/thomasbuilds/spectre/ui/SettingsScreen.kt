@@ -178,7 +178,7 @@ private fun Section(
       shape = RoundedCornerShape(14.dp),
       color = MaterialTheme.colorScheme.surface
     ) {
-      Column(modifier = Modifier.padding(vertical = 8.dp)) { content() }
+      Column { content() }
     }
   }
 }

@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
@@ -122,10 +123,9 @@ private fun SponsorTile(
     modifier =
       Modifier
         .fillMaxWidth()
-        .background(
-          MaterialTheme.colorScheme.surfaceVariant,
-          RoundedCornerShape(8.dp)
-        ).clickable(onClick = onTap)
+        .clip(RoundedCornerShape(8.dp))
+        .background(MaterialTheme.colorScheme.surfaceVariant)
+        .clickable(onClick = onTap)
         .padding(horizontal = 12.dp, vertical = 10.dp)
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
