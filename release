@@ -79,12 +79,14 @@ command -v gh >/dev/null || die "gh not found"
 gh auth status >/dev/null 2>&1 \
   || die "gh not authenticated, run: gh auth login"
 command -v java >/dev/null || die "java not found"
-# Only the full opensc package works, opensc-pkcs11 alone segfaults the JVM.
 [[ -f ${PKCS11_LIB} ]] \
-  || die "PKCS#11 module not found at ${PKCS11_LIB} (apt install opensc)"
+  || die "PKCS#11 module not found at ${PKCS11_LIB} (apt install opensc-pkcs11)"
 [[ -z "$(git status --porcelain)" ]] || die "working tree not clean"
 git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
   && die "tag ${TAG} already exists"
+# gh release create silently reuses an existing remote tag, ignoring --target.
+git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1 \
+  && die "tag ${TAG} already exists on origin"
 gh release view "${TAG}" >/dev/null 2>&1 \
   && die "release ${TAG} already exists"
 git fetch -q origin main
@@ -118,6 +120,26 @@ cleanup() {
 }
 trap cleanup EXIT
 
+PKCS11_CFG="$(mktemp)"
+printf 'name = OpenSC\nlibrary = %s\n' "${PKCS11_LIB}" >"${PKCS11_CFG}"
+
+# Detect the token through the same PKCS#11 stack apksigner uses. A USB-level
+# check (ykman) can pass while this path is broken.
+pkcs11_token_present() {
+  local out
+  out=$(echo | LC_ALL=C keytool -keystore NONE -storetype PKCS11 \
+    -providerClass sun.security.pkcs11.SunPKCS11 \
+    -providerArg "${PKCS11_CFG}" -list 2>&1 || true)
+  grep -q 'Enter keystore password' <<<"${out}"
+}
+echo ">> Checking YubiKey access"
+# One retry absorbs pcscd's cold start after a replug.
+pkcs11_token_present || {
+  sleep 2
+  pkcs11_token_present
+} \
+  || die "YubiKey not visible via PKCS#11, replug it and retry"
+
 echo ">> Setting version ${VERSION_NAME} (code ${VERSION_CODE})"
 sed -i -E \
   -e "s/(versionCode = )[0-9]+/\1${VERSION_CODE}/" \
@@ -141,6 +163,8 @@ UNSIGNED="${RELEASE_APKS[0]}"
 APK_BASE="$(basename "${UNSIGNED}" -release-unsigned.apk)"
 SIGNED="${OUT}/${APK_BASE}-${TAG}.apk"
 AAB="app/build/outputs/bundle/release/${APK_BASE}-release.aab"
+# A failed run must not leave a previous run's artifacts looking current.
+rm -f "${SIGNED}" "${SIGNED%.apk}.apks"
 
 if [[ -z ${APP_NAME} ]]; then
   APP_NAME="$("${BT}/aapt2" dump badging "${UNSIGNED}" 2>/dev/null \
@@ -153,8 +177,6 @@ echo ">> Checking APK alignment"
 "${BT}/zipalign" -c -p 4 "${UNSIGNED}" >/dev/null \
   || die "unsigned APK is not aligned"
 
-PKCS11_CFG="$(mktemp)"
-printf 'name = OpenSC\nlibrary = %s\n' "${PKCS11_LIB}" >"${PKCS11_CFG}"
 # The PIN must never reach argv or disk.
 read -rsp '>> Enter YubiKey PIN: ' YUBIKEY_PIN
 echo
@@ -187,13 +209,18 @@ echo ">> Signing the APK with the YubiKey, please touch your device"
 sign_apk "${UNSIGNED}" "${SIGNED}" --alignment-preserved \
   || die "apksigner signing failed"
 
+verify_cert() {
+  local fp
+  fp=$(
+    java --enable-native-access=ALL-UNNAMED \
+      -jar "${BT}/lib/apksigner.jar" verify --print-certs "$1" \
+      | awk '/SHA-256 digest:/ {print $NF; exit}'
+  )
+  normalize_fp "${fp}"
+}
+
 echo ">> Verifying signature"
-GOT=$(
-  java --enable-native-access=ALL-UNNAMED \
-    -jar "${BT}/lib/apksigner.jar" verify --print-certs "${SIGNED}" \
-    | awk '/SHA-256 digest:/ {print $NF; exit}'
-)
-GOT_NORM=$(normalize_fp "${GOT}")
+GOT_NORM=$(verify_cert "${SIGNED}")
 CERT_FMT=$(sed -E 's/(..)/\1:/g; s/:$//' <<<"${GOT_NORM^^}")
 if [[ -n ${EXPECTED_CERT} ]]; then
   [[ ${GOT_NORM} == "${EXPECTED_CERT}" ]] \
@@ -214,8 +241,8 @@ if ((${#BUNDLETOOL[@]})); then
   ANDROID_SDK_HOME="${APKS_TMP}" HOME="${APKS_TMP}" \
     JAVA_TOOL_OPTIONS="-Duser.home=${APKS_TMP}" \
     "${BUNDLETOOL[@]}" build-apks \
-    --bundle "${AAB}" --output "${APKS_TMP}/unsigned.apks" \
-    2> >(grep -v '^Picked up JAVA_TOOL_OPTIONS' >&2) \
+    --bundle "${AAB}" --output "${APKS_TMP}/unsigned.apks" >/dev/null \
+    2> >(grep -vE '^(Picked up JAVA_TOOL_OPTIONS|WARNING: )' >&2) \
     || die "bundletool build-apks failed"
   mkdir "${APKS_TMP}/set"
   unzip -q "${APKS_TMP}/unsigned.apks" -d "${APKS_TMP}/set"
@@ -223,12 +250,15 @@ if ((${#BUNDLETOOL[@]})); then
   SPLITS=("${APKS_TMP}/set"/splits/*.apk)
   shopt -u nullglob
   ((${#SPLITS[@]})) || die "no split APKs in the APK set"
-  echo ">> Signing ${#SPLITS[@]} split APKs, touch your device for each"
+  echo ">> Signing ${#SPLITS[@]} split APKs"
   for SPLIT in "${SPLITS[@]}"; do
     sign_apk "${SPLIT}" "${SPLIT}.signed" \
       || die "apksigner failed on $(basename "${SPLIT}")"
     mv -f "${SPLIT}.signed" "${SPLIT}"
+    [[ "$(verify_cert "${SPLIT}")" == "${GOT_NORM}" ]] \
+      || die "signature mismatch on $(basename "${SPLIT}")"
   done
+  echo "   Split signatures OK"
   APKSET="${OUT}/${APK_BASE}-${TAG}.apks"
   (cd "${APKS_TMP}/set" && zip -q -X -r - .) >"${APKSET}"
 else
@@ -247,24 +277,21 @@ unset YUBIKEY_PIN
   echo "\`${CERT_FMT}\`"
 } >"${NOTES}"
 
-echo ">> Committing and pushing ${TAG}"
+echo ">> Committing and pushing the release commit"
 git add "${GRADLE_FILE}"
 # Re-releasing a yanked version stages nothing, and an empty commit would die.
 if ! git diff --cached --quiet; then
   git commit -q -m "Release ${VERSION_NAME}"
 fi
-git tag "${TAG}"
-# Drop the tag on rejection so a rerun is clean.
-git push --atomic -q origin HEAD:main "refs/tags/${TAG}" \
-  || {
-    git tag -d "${TAG}" >/dev/null
-    die "push rejected, nothing published"
-  }
+git push -q origin HEAD:main || die "push rejected, nothing published"
 
 echo ">> Creating draft GitHub release for ${TAG}"
 PRERELEASE_FLAG=()
 ((PRE_ORDINAL != 999)) && PRERELEASE_FLAG+=(--prerelease)
-gh release create "${TAG}" --verify-tag --title "${APP_NAME} ${TAG}" \
+# No tag is pushed here: GitHub creates it at the target commit when the draft
+# is published, so the tag and its APK appear together for F-Droid.
+gh release create "${TAG}" --target "$(git rev-parse HEAD)" \
+  --title "${APP_NAME} ${TAG}" \
   --notes-file "${NOTES}" --draft "${PRERELEASE_FLAG[@]}" \
   "${SIGNED}"
 
