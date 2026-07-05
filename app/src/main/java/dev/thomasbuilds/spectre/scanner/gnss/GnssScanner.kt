@@ -42,9 +42,6 @@ class GnssScanner(
   private val rangeRates = ConcurrentHashMap<Pair<Constellation, Int>, RangeReading>()
 
   @Volatile
-  private var measurementsNotSupported = false
-
-  @Volatile
   private var driftSeen = false
 
   @Volatile
@@ -102,8 +99,10 @@ class GnssScanner(
           )
         }
 
+        val measurementsUnsupported =
+          runCatching { lm?.gnssCapabilities?.hasMeasurements() == false }.getOrDefault(false)
         val rateUnavailable =
-          measurementsNotSupported || (!driftSeen && syncedNoDriftEpochs >= SYNCED_NO_DRIFT_EPOCHS)
+          measurementsUnsupported || (!driftSeen && syncedNoDriftEpochs >= SYNCED_NO_DRIFT_EPOCHS)
         val groups = raw.groupBy { it.constellation to it.svid }
         val merged =
           groups.values.map { group ->
@@ -195,10 +194,6 @@ class GnssScanner(
 
   private val measurementsCallback =
     object : GnssMeasurementsEvent.Callback() {
-      override fun onStatusChanged(status: Int) {
-        if (status == STATUS_NOT_SUPPORTED) measurementsNotSupported = true
-      }
-
       override fun onGnssMeasurementsReceived(event: GnssMeasurementsEvent) {
         val clock = event.clock
         if (!clock.hasDriftNanosPerSecond()) {
@@ -269,7 +264,6 @@ class GnssScanner(
     rangeRates.clear()
     driftSeen = false
     syncedNoDriftEpochs = 0
-    measurementsNotSupported = false
     registered = false
   }
 
