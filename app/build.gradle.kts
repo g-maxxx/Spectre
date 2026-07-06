@@ -33,6 +33,7 @@ android {
         getDefaultProguardFile("proguard-android-optimize.txt"),
         "proguard-rules.pro"
       )
+      vcsInfo { include = false }
     }
   }
   compileOptions {
@@ -57,6 +58,12 @@ android {
     language { enableSplit = false }
     density { enableSplit = false }
     abi { enableSplit = false }
+  }
+
+  packaging {
+    jniLibs {
+      keepDebugSymbols += "**/*.so"
+    }
   }
 }
 
