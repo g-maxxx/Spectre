@@ -92,6 +92,8 @@ class BluetoothScanner(
 
   @Volatile private var scanning = false
 
+  @Volatile private var stopped = false
+
   @Volatile private var lastResultMs: Long = 0L
 
   @Volatile private var scanStartedMs: Long = 0L
@@ -105,7 +107,7 @@ class BluetoothScanner(
   private var heartbeatJob: Job? = null
   private var watchdogJob: Job? = null
 
-  private val readiness = ReadinessTracker(BT_WARMUP_MS, BT_STALENESS_MS)
+  private val readiness = ReadinessTracker(BT_WARMUP_MS)
 
   private val ingestExecutor = daemonExecutor("spectre-bt")
 
@@ -342,6 +344,7 @@ class BluetoothScanner(
   @Synchronized
   @SuppressLint("MissingPermission")
   private fun startScan() {
+    if (stopped) return
     if (scanning) {
       maybeRestartIfStalled()
       return
@@ -379,6 +382,7 @@ class BluetoothScanner(
   @Synchronized
   @SuppressLint("MissingPermission")
   fun stop() {
+    stopped = true
     if (!scanning) return
     try {
       adapter?.bluetoothLeScanner?.stopScan(callback)
@@ -511,7 +515,6 @@ class BluetoothScanner(
     const val BT_PUBLISH_DEBOUNCE_MS = 250L
     const val BT_HEARTBEAT_MS = 5_000L
     const val BT_WARMUP_MS = 6_000L
-    const val BT_STALENESS_MS = 20_000L
 
     const val MAX_TRACKED_DEVICES = 10_000
   }

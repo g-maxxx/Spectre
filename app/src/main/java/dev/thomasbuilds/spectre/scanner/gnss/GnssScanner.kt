@@ -47,12 +47,19 @@ class GnssScanner(
 
   @Volatile private var registered = false
 
+  @Volatile private var stopped = false
+
   private val rangeRates = ConcurrentHashMap<Pair<Constellation, Int>, RangeReading>()
+
+  // Chipset constant, avoids a binder call per status epoch.
+  private val measurementsSupported by lazy {
+    runCatching { lm?.gnssCapabilities?.hasMeasurements() != false }.getOrDefault(true)
+  }
 
   private val _state = MutableStateFlow(GnssSourceState())
   val state: StateFlow<GnssSourceState> = _state.asStateFlow()
 
-  private val readiness = ReadinessTracker(GNSS_WARMUP_MS, GNSS_STALENESS_MS)
+  private val readiness = ReadinessTracker(GNSS_WARMUP_MS)
   private var heartbeatJob: Job? = null
 
   private val callbackExecutor = daemonExecutor("spectre-gnss")
@@ -95,10 +102,8 @@ class GnssScanner(
             )
           }
 
-        val measurementsUnsupported =
-          runCatching { lm?.gnssCapabilities?.hasMeasurements() == false }.getOrDefault(false)
         val rateUnavailable =
-          measurementsUnsupported || (!driftSeen && syncedNoDriftEpochs >= SYNCED_NO_DRIFT_EPOCHS)
+          !measurementsSupported || (!driftSeen && syncedNoDriftEpochs >= SYNCED_NO_DRIFT_EPOCHS)
         val merged =
           raw.groupBy { it.constellation to it.svid }.values.map { group ->
             val bandsByCn0 = group.sortedByDescending { it.cn0DbHz }
@@ -138,8 +143,8 @@ class GnssScanner(
                   add(DetailEntry("Position", "${formatDeg(subPoint.latDeg, 'N', 'S')}, ${formatDeg(subPoint.lonDeg, 'E', 'W')}"))
                   add(DetailEntry("Slant range", "${"%.0f".format(subPoint.slantRangeM / 1000.0)} km"))
                   add(DetailEntry("Orbital altitude", "${"%.0f".format(subPoint.altitudeAboveEarthM / 1000.0)} km"))
-                } else if (phoneLoc == null) {
-                  add(DetailEntry("Position", "Pending"))
+                } else {
+                  add(DetailEntry("Position", if (phoneLoc == null) "Pending" else "Below horizon"))
                 }
                 add(DetailEntry("Ephemeris data", if (bestBand.hasEphemeris) "Yes" else "No"))
                 add(DetailEntry("Almanac data", if (bestBand.hasAlmanac) "Yes" else "No"))
@@ -212,7 +217,7 @@ class GnssScanner(
 
   @SuppressLint("MissingPermission")
   private fun maybeRegister() {
-    if (registered || !hasPermission()) return
+    if (stopped || registered || !hasPermission()) return
     lm
       ?.runCatching {
         val request =
@@ -221,6 +226,7 @@ class GnssScanner(
             .setMinUpdateDistanceMeters(0f)
             .setQuality(LocationRequest.QUALITY_HIGH_ACCURACY)
             .build()
+        if (lastLocation == null) lastLocation = getLastKnownLocation(LocationManager.FUSED_PROVIDER)
         requestLocationUpdates(LocationManager.GPS_PROVIDER, request, callbackExecutor, locationListener)
         registerGnssStatusCallback(callbackExecutor, callback)
         registerGnssMeasurementsCallback(callbackExecutor, measurementsCallback)
@@ -229,6 +235,7 @@ class GnssScanner(
   }
 
   fun stop() {
+    stopped = true
     lm?.runCatching {
       unregisterGnssStatusCallback(callback)
       unregisterGnssMeasurementsCallback(measurementsCallback)

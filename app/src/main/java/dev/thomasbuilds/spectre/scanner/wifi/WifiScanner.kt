@@ -65,7 +65,7 @@ class WifiScanner(
 
   @Volatile private var liveConnectedRssi: Int? = null
 
-  private val readiness = ReadinessTracker(WIFI_WARMUP_MS, WIFI_STALENESS_MS)
+  private val readiness = ReadinessTracker(WIFI_WARMUP_MS)
 
   private var scanLoopJob: Job? = null
   private var heartbeatJob: Job? = null
@@ -105,6 +105,8 @@ class WifiScanner(
   private var registered = false
   private var networkCallbackRegistered = false
 
+  @Volatile private var stopped = false
+
   fun hasPermission(): Boolean = context.hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 
   fun status(): ScannerStatus {
@@ -143,7 +145,7 @@ class WifiScanner(
   }
 
   private fun maybeRegister() {
-    if (!hasPermission()) return
+    if (stopped || !hasPermission()) return
     val w = wifi ?: return
     if (!registered) {
       runCatching { w.registerScanResultsCallback(callbackExecutor, scanCallback) }
@@ -162,6 +164,7 @@ class WifiScanner(
   }
 
   fun stop() {
+    stopped = true
     if (registered) {
       wifi?.unregisterScanResultsCallback(scanCallback)
       registered = false
@@ -399,7 +402,6 @@ class WifiScanner(
     const val WIFI_PROBE_INTERVAL_THROTTLED_MS = 31_000L
     const val WIFI_HEARTBEAT_MS = 5_000L
     const val WIFI_WARMUP_MS = 35_000L
-    const val WIFI_STALENESS_MS = 130_000L
 
     const val MAX_TRACKED_APS = 10_000
   }

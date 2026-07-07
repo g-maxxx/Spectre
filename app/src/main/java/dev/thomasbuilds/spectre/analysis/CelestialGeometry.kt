@@ -117,7 +117,7 @@ object CelestialGeometry {
       }
 
       Constellation.QZSS -> {
-        36_000_000.0
+        35_786_000.0
       }
 
       Constellation.SBAS -> {

@@ -64,7 +64,7 @@ class CellularScanner(
   private val cellCache = ConcurrentHashMap<String, CellSignal>()
   private val cellSeenAt = ConcurrentHashMap<String, Long>()
 
-  private val readiness = ReadinessTracker(CELL_WARMUP_MS, CELL_STALENESS_MS)
+  private val readiness = ReadinessTracker(CELL_WARMUP_MS)
 
   private var heartbeatJob: Job? = null
 
@@ -612,6 +612,5 @@ class CellularScanner(
 
     const val CELL_HEARTBEAT_MS = 5_000L
     const val CELL_WARMUP_MS = 8_000L
-    const val CELL_STALENESS_MS = 15_000L
   }
 }
