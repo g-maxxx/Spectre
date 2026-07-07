@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.location.LocationManager
+import android.os.SystemClock
 import android.telephony.CellIdentity
 import android.telephony.CellIdentityGsm
 import android.telephony.CellIdentityLte
@@ -336,7 +337,7 @@ class CellularScanner(
             }
           }.getOrNull()
         }.map { it.copy(identifier = "$subId:${it.identifier}") }
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     fresh.forEach {
       cellCache[it.identifier] = it
       cellSeenAt[it.identifier] = now
@@ -359,7 +360,7 @@ class CellularScanner(
       } else {
         emptyList()
       }
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val ready = readiness.compute(status == ScannerStatus.OK, signals.isNotEmpty(), now)
     _state.value =
       CellularSourceState(
@@ -566,7 +567,7 @@ class CellularScanner(
     bandwidthKhz: Int?,
     earfcn: Int?
   ): Int {
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val rssiAvailable = rssi != CellInfo.UNAVAILABLE
     if (rssiAvailable && (rssi - rsrpDbm) <= MAX_LTE_RSSI_OVER_RSRP_DB) {
       if (earfcn != null) lteRssiCache[earfcn] = CachedRssi(rssi, now)

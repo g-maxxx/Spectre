@@ -3,6 +3,7 @@ package dev.thomasbuilds.spectre.ui
 import android.Manifest
 import android.app.Activity
 import android.os.Build
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -101,7 +102,7 @@ fun ReconScreen(onBack: () -> Unit) {
     scanJob =
       scope.launch {
         val net = subnet ?: return@launch
-        val startMs = System.currentTimeMillis()
+        val startMs = SystemClock.elapsedRealtime()
         val hostJob =
           launch {
             scanner.scanHosts(net).collect { host ->
@@ -129,7 +130,7 @@ fun ReconScreen(onBack: () -> Unit) {
         hostJob.join()
         localBlocked = scanner.localAccessBlocked
         ssdpJob.join()
-        val remaining = DISCOVERY_WINDOW_MS - (System.currentTimeMillis() - startMs)
+        val remaining = DISCOVERY_WINDOW_MS - (SystemClock.elapsedRealtime() - startMs)
         if (remaining > 0) kotlinx.coroutines.delay(remaining)
         mdnsJob.cancel()
         scanning = false

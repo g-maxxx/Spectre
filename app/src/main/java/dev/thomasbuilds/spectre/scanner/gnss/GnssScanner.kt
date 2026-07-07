@@ -8,6 +8,7 @@ import android.location.GnssStatus
 import android.location.LocationListener
 import android.location.LocationManager
 import android.location.LocationRequest
+import android.os.SystemClock
 import android.util.Log
 import dev.thomasbuilds.spectre.analysis.CelestialGeometry
 import dev.thomasbuilds.spectre.hasPermission
@@ -79,7 +80,7 @@ class GnssScanner(
   private val callback =
     object : GnssStatus.Callback() {
       override fun onSatelliteStatusChanged(status: GnssStatus) {
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         val rawCount = status.satelliteCount
         val raw = ArrayList<RawSatelliteEntry>(rawCount)
         for (i in 0..<rawCount) {
@@ -203,7 +204,7 @@ class GnssScanner(
         driftSeen = true
         syncedNoDriftEpochs = 0
         val driftMps = clock.driftNanosPerSecond * 1e-9 * SPEED_OF_LIGHT_MPS
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         for (m in event.measurements) {
           val geometric = m.pseudorangeRateMetersPerSecond - driftMps
           rangeRates[GnssBands.constellationFor(m.constellationType) to m.svid] =
@@ -270,7 +271,7 @@ class GnssScanner(
   private fun publishNow() {
     val status = status()
     val signals = if (status == ScannerStatus.OK) lastSatellites else emptyList()
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val ready = readiness.compute(status == ScannerStatus.OK, signals.isNotEmpty(), now)
     _state.value =
       GnssSourceState(

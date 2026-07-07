@@ -1,6 +1,7 @@
 package dev.thomasbuilds.spectre.recon
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Immutable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -51,9 +52,9 @@ class SsdpDiscovery(
           }
 
           val seen = HashSet<String>()
-          val deadline = System.currentTimeMillis() + timeoutMs
+          val deadline = SystemClock.elapsedRealtime() + timeoutMs
           val buf = ByteArray(2048)
-          while (System.currentTimeMillis() < deadline) {
+          while (SystemClock.elapsedRealtime() < deadline) {
             val packet = DatagramPacket(buf, buf.size)
             try {
               socket.receive(packet)

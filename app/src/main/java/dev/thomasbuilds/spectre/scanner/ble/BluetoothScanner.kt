@@ -10,6 +10,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.location.LocationManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.util.isNotEmpty
 import androidx.core.util.size
@@ -114,12 +115,12 @@ class BluetoothScanner(
         callbackType: Int,
         result: ScanResult
       ) {
-        lastResultMs = System.currentTimeMillis()
+        lastResultMs = SystemClock.elapsedRealtime()
         ingestExecutor.execute { handle(result) }
       }
 
       override fun onBatchScanResults(results: MutableList<ScanResult>) {
-        lastResultMs = System.currentTimeMillis()
+        lastResultMs = SystemClock.elapsedRealtime()
         ingestExecutor.execute { results.forEach(::handle) }
       }
 
@@ -160,7 +161,7 @@ class BluetoothScanner(
         nameIpcAttempted = true
       }
     }
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val isConnectable = result.isConnectable
     deviceCache[mac] =
       DeviceState(
@@ -366,7 +367,7 @@ class BluetoothScanner(
     try {
       scanner.startScan(null, settings, callback)
       scanning = true
-      scanStartedMs = System.currentTimeMillis()
+      scanStartedMs = SystemClock.elapsedRealtime()
       lastResultMs = scanStartedMs
     } catch (e: SecurityException) {
       Log.w(TAG, "startScan denied: ${e.message}")
@@ -396,7 +397,7 @@ class BluetoothScanner(
   @SuppressLint("MissingPermission")
   private fun maybeRestartIfStalled() {
     if (!scanning) return
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val sinceStart = now - scanStartedMs
     if (sinceStart < STALL_GRACE_MS) return
     if (lastResultMs <= scanStartedMs) return
@@ -429,7 +430,7 @@ class BluetoothScanner(
       startScan()
     }
     enforceSizeCap()
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val bonded = bondedMacs()
     val signals =
       if (status != ScannerStatus.OK) {

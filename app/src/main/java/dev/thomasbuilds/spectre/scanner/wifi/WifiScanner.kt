@@ -11,6 +11,7 @@ import android.net.NetworkRequest
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.SystemClock
 import dev.thomasbuilds.spectre.analysis.Distance
 import dev.thomasbuilds.spectre.analysis.smoothRssi
 import dev.thomasbuilds.spectre.hasPermission
@@ -188,7 +189,7 @@ class WifiScanner(
   private fun publishNow() {
     val status = status()
     enforceSizeCap()
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val generation = scanGeneration.get()
     val signals =
       if (status != ScannerStatus.OK) {
@@ -256,7 +257,7 @@ class WifiScanner(
       runCatching { w.scanResults ?: emptyList() }
         .getOrDefault(emptyList())
     val connectedBssid = currentConnectedBssid(w)
-    val now = System.currentTimeMillis()
+    val now = SystemClock.elapsedRealtime()
     val generation = scanGeneration.incrementAndGet()
 
     results.forEach { sr ->

@@ -9,6 +9,7 @@ import android.net.wifi.rtt.RangingRequest
 import android.net.wifi.rtt.RangingResult
 import android.net.wifi.rtt.RangingResultCallback
 import android.net.wifi.rtt.WifiRttManager
+import android.os.SystemClock
 import android.util.Log
 import dev.thomasbuilds.spectre.hasPermission
 import dev.thomasbuilds.spectre.scanner.daemonExecutor
@@ -42,7 +43,7 @@ class WifiRttRanger(
   ): FtmReading? {
     if (bssid.isNullOrEmpty()) return null
     val r = cache[bssid.uppercase()] ?: return null
-    return if (System.currentTimeMillis() - r.timestampMs < maxAgeMs) r else null
+    return if (SystemClock.elapsedRealtime() - r.timestampMs < maxAgeMs) r else null
   }
 
   @SuppressLint("MissingPermission")
@@ -83,7 +84,7 @@ class WifiRttRanger(
         object : RangingResultCallback() {
           override fun onRangingResults(results: List<RangingResult>) {
             inFlight.set(false)
-            val now = System.currentTimeMillis()
+            val now = SystemClock.elapsedRealtime()
             results.forEach { r ->
               val mac = r.macAddress?.toString()?.uppercase() ?: return@forEach
               if (r.status == RangingResult.STATUS_SUCCESS) {
