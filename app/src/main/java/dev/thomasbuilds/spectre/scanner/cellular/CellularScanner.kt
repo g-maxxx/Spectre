@@ -88,7 +88,8 @@ class CellularScanner(
   private class SubMonitor(
     val subId: Int,
     val tm: TelephonyManager,
-    val callback: TelephonyCallback
+    val callback: TelephonyCallback,
+    val withDisplayInfo: Boolean
   )
 
   private val subMonitors = ConcurrentHashMap<Int, SubMonitor>()
@@ -161,13 +162,9 @@ class CellularScanner(
       heartbeatJob =
         scope.repeatEvery(CELL_HEARTBEAT_MS) {
           if (status() == ScannerStatus.OK) {
-            // Recover if the first sync registered no subscriptions (e.g. the SIM was not yet
-            // readable right after the permission grant). start() runs only once, so without this
-            // the card stays at zero until the service is recreated.
-            if (subMonitors.isEmpty()) {
-              syncSubscriptions()
-              registerSubscriptionChangeListener()
-            }
+            // start() runs once; ticking recovers late permission grants and data-SIM changes.
+            syncSubscriptions()
+            registerSubscriptionChangeListener()
             requestCellInfoRefresh()
           }
           publishNow()
@@ -194,7 +191,7 @@ class CellularScanner(
   @Synchronized
   @SuppressLint("MissingPermission")
   private fun registerSubscriptionChangeListener() {
-    if (subsChangeListener != null) return
+    if (stopped || subsChangeListener != null) return
     val sm = subscriptionManager ?: return
     val listener =
       object : SubscriptionManager.OnSubscriptionsChangedListener() {
@@ -214,21 +211,23 @@ class CellularScanner(
     val targetSubIds = activeSubIds().toSet()
     val dataSubId = SubscriptionManager.getDefaultDataSubscriptionId()
 
-    subMonitors.keys
-      .filter { it !in targetSubIds }
-      .forEach { subId ->
-        subMonitors.remove(subId)?.let { mon ->
-          runCatching { mon.tm.unregisterTelephonyCallback(mon.callback) }
-          purgeSub(subId)
-        }
-      }
+    subMonitors.values.toList().forEach { mon ->
+      val active = mon.subId in targetSubIds
+      // A stale DisplayInfo role (data SIM moved) also drops the monitor for re-registration below.
+      if (active && mon.withDisplayInfo == (mon.subId == dataSubId)) return@forEach
+      subMonitors.remove(mon.subId)
+      runCatching { mon.tm.unregisterTelephonyCallback(mon.callback) }
+      if (mon.withDisplayInfo) lastDisplayInfo = null
+      if (!active) purgeSub(mon.subId)
+    }
 
     targetSubIds.forEach { subId ->
       if (subMonitors.containsKey(subId)) return@forEach
       val tm = telephony?.createForSubscriptionId(subId) ?: return@forEach
-      val callback = makeCellCallback(subId, withDisplayInfo = subId == dataSubId)
+      val withDisplayInfo = subId == dataSubId
+      val callback = makeCellCallback(subId, withDisplayInfo)
       runCatching { tm.registerTelephonyCallback(callbackExecutor, callback) }
-        .onSuccess { subMonitors[subId] = SubMonitor(subId, tm, callback) }
+        .onSuccess { subMonitors[subId] = SubMonitor(subId, tm, callback, withDisplayInfo) }
     }
   }
 
@@ -338,21 +337,21 @@ class CellularScanner(
           }.getOrNull()
         }.map { it.copy(identifier = "$subId:${it.identifier}") }
     val now = SystemClock.elapsedRealtime()
+    // Timestamp first, so the expiry sweep's conditional remove can't drop a concurrent refresh.
     fresh.forEach {
-      cellCache[it.identifier] = it
       cellSeenAt[it.identifier] = now
-    }
-    val expired =
-      cellSeenAt.entries
-        .filter { now - it.value > STALE_TTL_MS }
-        .map { it.key }
-    expired.forEach {
-      cellCache.remove(it)
-      cellSeenAt.remove(it)
+      cellCache[it.identifier] = it
     }
   }
 
   private fun publishNow() {
+    val now = SystemClock.elapsedRealtime()
+    // Expiring here, not on ingest, ages towers out even when the radio goes silent.
+    cellSeenAt.forEach { (key, seenAt) ->
+      if (now - seenAt > STALE_TTL_MS && cellSeenAt.remove(key, seenAt)) {
+        cellCache.remove(key)
+      }
+    }
     val status = status()
     val signals =
       if (status == ScannerStatus.OK) {
@@ -360,7 +359,6 @@ class CellularScanner(
       } else {
         emptyList()
       }
-    val now = SystemClock.elapsedRealtime()
     val ready = readiness.compute(status == ScannerStatus.OK, signals.isNotEmpty(), now)
     _state.value =
       CellularSourceState(
@@ -399,7 +397,6 @@ class CellularScanner(
     val rawDbm = ss?.dbm
     val dbm = sanitizeDbm(rawDbm) ?: return null
     val exposureDbm = dbm + NR_SSRSRP_TO_RSSI_OFFSET_DB
-    val nci = sanitizeNci(id?.nci) ?: 0L
     val operator = operatorName(id)
     val details =
       buildList {
@@ -430,7 +427,8 @@ class CellularScanner(
       channelKey = id?.nrarfcn?.takeIf { it != Int.MAX_VALUE && it > 0 }?.let { "NR-$it" },
       distanceMeters = null,
       distanceConfidence = DistanceConfidence.NONE,
-      identifier = "NR-$nci",
+      // Neighbors usually lack a cell id; fall back to physical-layer identity so they don't collide.
+      identifier = "NR-${sanitizeNci(id?.nci) ?: "pci${id?.pci}@${id?.nrarfcn}"}",
       operator = operator,
       isConnected = info.isRegistered,
       details = details
@@ -445,7 +443,6 @@ class CellularScanner(
     val bandwidthKhz = id.bandwidth.takeIf { it != Int.MAX_VALUE && it > 0 }
     val earfcn = id.earfcn.takeIf { it != Int.MAX_VALUE && it > 0 }
     val exposureDbm = lteExposureDbm(ss.rssi, dbm, bandwidthKhz, earfcn)
-    val ci = sanitizeCellId(id.ci) ?: 0
     val ta = ss.timingAdvance
     val distance: Double? = if (ta in 1..1282) Distance.fromLteTimingAdvance(ta) else null
     val operator = operatorName(id)
@@ -476,7 +473,7 @@ class CellularScanner(
       channelKey = earfcn?.let { "LTE-$it" },
       distanceMeters = distance,
       distanceConfidence = if (distance != null) DistanceConfidence.CALIBRATED else DistanceConfidence.NONE,
-      identifier = "LTE-$ci",
+      identifier = "LTE-${sanitizeCellId(id.ci) ?: "pci${id.pci}@${id.earfcn}"}",
       operator = operator,
       isConnected = info.isRegistered,
       details = details
@@ -490,7 +487,6 @@ class CellularScanner(
     val dbm = sanitizeDbm(rawDbm) ?: return null
     val ecNo = ss.ecNo.takeIf { it != CellInfo.UNAVAILABLE }
     val exposureDbm = if (ecNo != null) dbm - ecNo else dbm + WCDMA_RSCP_TO_RSSI_OFFSET_DB
-    val cid = sanitizeCellId(id.cid) ?: 0
     val operator = operatorName(id)
     val details =
       buildList {
@@ -512,7 +508,7 @@ class CellularScanner(
       channelKey = id.uarfcn.takeIf { it != Int.MAX_VALUE && it > 0 }?.let { "WCDMA-$it" },
       distanceMeters = null,
       distanceConfidence = DistanceConfidence.NONE,
-      identifier = "WCDMA-$cid",
+      identifier = "WCDMA-${sanitizeCellId(id.cid) ?: "psc${id.psc}@${id.uarfcn}"}",
       operator = operator,
       isConnected = info.isRegistered,
       details = details
@@ -525,7 +521,6 @@ class CellularScanner(
     val rawDbm = ss.dbm
     val dbm = sanitizeDbm(rawDbm) ?: return null
     val exposureDbm = dbm
-    val cid = sanitizeCellId(id.cid) ?: 0
     val ta = ss.timingAdvance
     val distance: Double? = if (ta in 1..219) Distance.fromGsmTimingAdvance(ta) else null
     val operator = operatorName(id)
@@ -554,7 +549,7 @@ class CellularScanner(
       channelKey = id.arfcn.takeIf { it != Int.MAX_VALUE && it > 0 }?.let { "GSM-$it" },
       distanceMeters = distance,
       distanceConfidence = if (distance != null) DistanceConfidence.CALIBRATED else DistanceConfidence.NONE,
-      identifier = "GSM-$cid",
+      identifier = "GSM-${sanitizeCellId(id.cid) ?: "bsic${id.bsic}@${id.arfcn}"}",
       operator = operator,
       isConnected = info.isRegistered,
       details = details
@@ -568,8 +563,8 @@ class CellularScanner(
     earfcn: Int?
   ): Int {
     val now = SystemClock.elapsedRealtime()
-    val rssiAvailable = rssi != CellInfo.UNAVAILABLE
-    if (rssiAvailable && (rssi - rsrpDbm) <= MAX_LTE_RSSI_OVER_RSRP_DB) {
+    // RSSI physically sits at or above RSRP; readings outside 0..40 dB over RSRP are modem garbage.
+    if (rssi != CellInfo.UNAVAILABLE && (rssi - rsrpDbm) in 0..MAX_LTE_RSSI_OVER_RSRP_DB) {
       if (earfcn != null) lteRssiCache[earfcn] = CachedRssi(rssi, now)
       return rssi
     }
