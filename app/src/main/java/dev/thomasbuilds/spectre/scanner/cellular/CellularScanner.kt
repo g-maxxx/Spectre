@@ -19,6 +19,7 @@ import android.telephony.CellSignalStrengthGsm
 import android.telephony.CellSignalStrengthLte
 import android.telephony.CellSignalStrengthNr
 import android.telephony.CellSignalStrengthWcdma
+import android.telephony.SignalStrength
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyCallback
 import android.telephony.TelephonyDisplayInfo
@@ -64,6 +65,11 @@ class CellularScanner(
   private val cellCache = ConcurrentHashMap<String, CellSignal>()
   private val cellSeenAt = ConcurrentHashMap<String, Long>()
 
+  // Latest per-sub SignalStrength; the serving cell's strength source when CellInfo omits it
+  // (Tensor intermittently reports the registered LTE cell with rsrp=UNAVAILABLE and a
+  // sentinel rssi while SignalStrength carries real values).
+  private val latestSignalStrength = ConcurrentHashMap<Int, SignalStrength>()
+
   private val readiness = ReadinessTracker(CELL_WARMUP_MS)
 
   private var heartbeatJob: Job? = null
@@ -106,10 +112,15 @@ class CellularScanner(
       object :
         TelephonyCallback(),
         TelephonyCallback.CellInfoListener,
+        TelephonyCallback.SignalStrengthsListener,
         TelephonyCallback.DisplayInfoListener {
         override fun onCellInfoChanged(cellInfo: List<CellInfo>) {
           ingestCellList(cellInfo, subId)
           publishNow()
+        }
+
+        override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
+          latestSignalStrength[subId] = signalStrength
         }
 
         override fun onDisplayInfoChanged(info: TelephonyDisplayInfo) {
@@ -120,10 +131,15 @@ class CellularScanner(
     } else {
       object :
         TelephonyCallback(),
-        TelephonyCallback.CellInfoListener {
+        TelephonyCallback.CellInfoListener,
+        TelephonyCallback.SignalStrengthsListener {
         override fun onCellInfoChanged(cellInfo: List<CellInfo>) {
           ingestCellList(cellInfo, subId)
           publishNow()
+        }
+
+        override fun onSignalStrengthsChanged(signalStrength: SignalStrength) {
+          latestSignalStrength[subId] = signalStrength
         }
       }
     }
@@ -240,6 +256,7 @@ class CellularScanner(
   }
 
   private fun purgeSub(subId: Int) {
+    latestSignalStrength.remove(subId)
     val prefix = "$subId:"
     cellCache.keys.filter { it.startsWith(prefix) }.forEach {
       cellCache.remove(it)
@@ -323,20 +340,27 @@ class CellularScanner(
     // identifier is prefixed with subId so the two SIMs' cells never collide, but channelKey
     // is intentionally left un-prefixed so the exposure power-sum still dedups a channel that
     // both SIMs observe.
+    val now = SystemClock.elapsedRealtime()
     val fresh =
       cells
         .mapNotNull { info ->
+          // The registry replays its last-known list to fresh listeners; an unregistered
+          // measurement the expiry sweep would already have aged out must not re-enter as
+          // current. Registered cells are exempt (the live connection corroborates them),
+          // and so are cells with zero/garbage timestamps, which some RILs report.
+          if (!info.isRegistered && info.timestampMillis > 0 && now - info.timestampMillis > STALE_TTL_MS) {
+            return@mapNotNull null
+          }
           runCatching {
             when (info) {
               is CellInfoNr -> parseNr(info)
-              is CellInfoLte -> parseLte(info)
+              is CellInfoLte -> parseLte(info, subId)
               is CellInfoWcdma -> parseWcdma(info)
               is CellInfoGsm -> parseGsm(info)
               else -> null
             }
           }.getOrNull()
         }.map { it.copy(identifier = "$subId:${it.identifier}") }
-    val now = SystemClock.elapsedRealtime()
     // Timestamp first, so the expiry sweep's conditional remove can't drop a concurrent refresh.
     fresh.forEach {
       cellSeenAt[it.identifier] = now
@@ -383,7 +407,6 @@ class CellularScanner(
 
   private fun sanitizeCellId(raw: Int?): Int? {
     if (raw == null) return null
-    if (raw == Int.MAX_VALUE) return null
     if (raw == CellInfo.UNAVAILABLE) return null
     if (raw < 0) return null
     return raw
@@ -394,6 +417,10 @@ class CellularScanner(
   private fun parseNr(info: CellInfoNr): CellSignal? {
     val ss = info.cellSignalStrength as? CellSignalStrengthNr
     val id = info.cellIdentity as? CellIdentityNr
+    // Tensor emits placeholder cells during NSA/RAT transitions: identity all zeros on a
+    // 0 Hz carrier (nrarfcn 0), signal frozen at the valid-range ceiling (ssRsrp -44).
+    // Nothing in them is measured.
+    if (id != null && id.nrarfcn == 0 && id.nci == 0L && id.pci == 0 && id.tac == 0) return null
     val rawDbm = ss?.dbm
     val dbm = sanitizeDbm(rawDbm) ?: return null
     val exposureDbm = dbm + NR_SSRSRP_TO_RSSI_OFFSET_DB
@@ -435,14 +462,32 @@ class CellularScanner(
     )
   }
 
-  private fun parseLte(info: CellInfoLte): CellSignal? {
+  private fun parseLte(
+    info: CellInfoLte,
+    subId: Int
+  ): CellSignal? {
     val ss: CellSignalStrengthLte = info.cellSignalStrength
     val id: CellIdentityLte = info.cellIdentity
-    val rawDbm = ss.dbm
-    val dbm = sanitizeDbm(rawDbm) ?: return null
+    var dbm = sanitizeDbm(ss.dbm)
+    var rssi = ss.rssi
+    if (dbm == null && info.isRegistered) {
+      // Tensor intermittently reports the registered cell with rsrp=UNAVAILABLE and a
+      // sentinel rssi (-113) while SignalStrength still carries the real measurement;
+      // without this the serving tower vanishes and only neighbors stay visible.
+      val sys =
+        latestSignalStrength[subId]
+          ?.getCellSignalStrengths(CellSignalStrengthLte::class.java)
+          ?.firstOrNull()
+      val sysRsrp = sys?.rsrp?.let(::sanitizeDbm)
+      if (sysRsrp != null) {
+        dbm = sysRsrp
+        rssi = sys.rssi
+      }
+    }
+    if (dbm == null) return null
     val bandwidthKhz = id.bandwidth.takeIf { it != Int.MAX_VALUE && it > 0 }
     val earfcn = id.earfcn.takeIf { it != Int.MAX_VALUE && it > 0 }
-    val exposureDbm = lteExposureDbm(ss.rssi, dbm, bandwidthKhz, earfcn)
+    val exposureDbm = lteExposureDbm(rssi, dbm, bandwidthKhz, earfcn)
     val ta = ss.timingAdvance
     val distance: Double? = if (ta in 1..1282) Distance.fromLteTimingAdvance(ta) else null
     val operator = operatorName(id)
@@ -483,9 +528,19 @@ class CellularScanner(
   private fun parseWcdma(info: CellInfoWcdma): CellSignal? {
     val ss: CellSignalStrengthWcdma = info.cellSignalStrength
     val id: CellIdentityWcdma = info.cellIdentity
+    // Same zero-identity placeholder pattern as NR, seen during LTE→UMTS transitions
+    // (cid/psc/lac/uarfcn all 0, rscp pinned at the -120 floor).
+    if (id.uarfcn == 0 && id.cid == 0 && id.psc == 0 && id.lac == 0) return null
     val rawDbm = ss.dbm
     val dbm = sanitizeDbm(rawDbm) ?: return null
     val ecNo = ss.ecNo.takeIf { it != CellInfo.UNAVAILABLE }
+    // Some modems (seen on Tensor while camped on UMTS) pad the cell list with their whole
+    // configured neighbor set, unmeasured entries pinned at the reporting floor (RSCP -116,
+    // Ec/No -24). A neighbor at the Ec/No floor or below RSCP demod sensitivity was never
+    // actually received.
+    if (!info.isRegistered && ((ecNo != null && ecNo <= WCDMA_ECNO_FLOOR_DB) || dbm <= WCDMA_NEIGHBOR_FLOOR_DBM)) {
+      return null
+    }
     val exposureDbm = if (ecNo != null) dbm - ecNo else dbm + WCDMA_RSCP_TO_RSSI_OFFSET_DB
     val operator = operatorName(id)
     val details =
@@ -600,6 +655,10 @@ class CellularScanner(
 
     const val NR_SSRSRP_TO_RSSI_OFFSET_DB = 30
     const val WCDMA_RSCP_TO_RSSI_OFFSET_DB = 10
+    // Bottom of the valid Ec/No reporting range [-24, 1].
+    const val WCDMA_ECNO_FLOOR_DB = -24
+    // Typical UE RSCP demodulation sensitivity; anything at or below is unreceivable.
+    const val WCDMA_NEIGHBOR_FLOOR_DBM = -115
     const val LTE_RSRP_FALLBACK_OFFSET_DB = 30
     const val LTE_RSSI_STALENESS_MS = 30_000L
 
