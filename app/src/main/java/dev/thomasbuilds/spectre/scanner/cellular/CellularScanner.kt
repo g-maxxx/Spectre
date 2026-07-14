@@ -347,7 +347,7 @@ class CellularScanner(
           // The registry replays its last-known list to fresh listeners; an unregistered
           // measurement the expiry sweep would already have aged out must not re-enter as
           // current. Registered cells are exempt (the live connection corroborates them),
-          // and so are cells with zero/garbage timestamps, which some RILs report.
+          // as are the zero timestamps some RILs report, which would read as infinitely old.
           if (!info.isRegistered && info.timestampMillis > 0 && now - info.timestampMillis > STALE_TTL_MS) {
             return@mapNotNull null
           }
@@ -400,7 +400,7 @@ class CellularScanner(
 
   private fun sanitizeNci(raw: Long?): Long? {
     if (raw == null) return null
-    if (raw == Long.MAX_VALUE) return null
+    if (raw == CellInfo.UNAVAILABLE_LONG) return null
     if (raw < 0L) return null
     return raw
   }
@@ -421,8 +421,7 @@ class CellularScanner(
     // 0 Hz carrier (nrarfcn 0), signal frozen at the valid-range ceiling (ssRsrp -44).
     // Nothing in them is measured.
     if (id != null && id.nrarfcn == 0 && id.nci == 0L && id.pci == 0 && id.tac == 0) return null
-    val rawDbm = ss?.dbm
-    val dbm = sanitizeDbm(rawDbm) ?: return null
+    val dbm = sanitizeDbm(ss?.dbm) ?: return null
     val exposureDbm = dbm + NR_SSRSRP_TO_RSSI_OFFSET_DB
     val operator = operatorName(id)
     val details =
@@ -430,7 +429,7 @@ class CellularScanner(
         add(DetailEntry("Status", if (info.isRegistered) "Serving" else "Neighbor"))
         id?.mccString?.let { add(DetailEntry("MCC", it)) }
         id?.mncString?.let { add(DetailEntry("MNC", it)) }
-        if (id != null && id.nci != Long.MAX_VALUE) add(DetailEntry("NCI", id.nci.toString()))
+        if (id != null && id.nci != CellInfo.UNAVAILABLE_LONG) add(DetailEntry("NCI", id.nci.toString()))
         if (id != null && id.pci != Int.MAX_VALUE) add(DetailEntry("PCI", id.pci.toString()))
         if (id != null && id.tac != Int.MAX_VALUE) add(DetailEntry("TAC", id.tac.toString()))
         if (id != null && id.nrarfcn != Int.MAX_VALUE) {
@@ -440,7 +439,7 @@ class CellularScanner(
         id
           ?.bands
           ?.takeIf { it.isNotEmpty() }
-          ?.let { add(DetailEntry("Bands", it.joinToString { "n$it" })) }
+          ?.let { bands -> add(DetailEntry("Bands", bands.joinToString { "n$it" })) }
         ss?.let {
           if (it.ssRsrq != CellInfo.UNAVAILABLE) add(DetailEntry("SS-RSRQ", "${it.ssRsrq} dB"))
           if (it.ssSinr != CellInfo.UNAVAILABLE) add(DetailEntry("SS-SINR", "${it.ssSinr} dB"))
@@ -478,10 +477,12 @@ class CellularScanner(
         latestSignalStrength[subId]
           ?.getCellSignalStrengths(CellSignalStrengthLte::class.java)
           ?.firstOrNull()
-      val sysRsrp = sys?.rsrp?.let(::sanitizeDbm)
-      if (sysRsrp != null) {
-        dbm = sysRsrp
-        rssi = sys.rssi
+      if (sys != null) {
+        val sysRsrp = sanitizeDbm(sys.rsrp)
+        if (sysRsrp != null) {
+          dbm = sysRsrp
+          rssi = sys.rssi
+        }
       }
     }
     if (dbm == null) return null
@@ -505,7 +506,7 @@ class CellularScanner(
           CellChannels.earfcnToMhz(id.earfcn)?.let { add(DetailEntry("Frequency", CellChannels.label(it))) }
         }
         if (id.bandwidth != Int.MAX_VALUE) add(DetailEntry("Bandwidth", "${id.bandwidth / 1000} MHz"))
-        id.bands.takeIf { it.isNotEmpty() }?.let { add(DetailEntry("Bands", it.joinToString { "B$it" })) }
+        id.bands.takeIf { it.isNotEmpty() }?.let { bands -> add(DetailEntry("Bands", bands.joinToString { "B$it" })) }
         if (ss.rsrq != CellInfo.UNAVAILABLE) add(DetailEntry("RSRQ", "${ss.rsrq} dB"))
         if (ss.rssnr != CellInfo.UNAVAILABLE) add(DetailEntry("SNR", "${ss.rssnr} dB"))
         if (ss.cqi != CellInfo.UNAVAILABLE) add(DetailEntry("CQI", ss.cqi.toString()))
@@ -531,13 +532,12 @@ class CellularScanner(
     // Same zero-identity placeholder pattern as NR, seen during LTE→UMTS transitions
     // (cid/psc/lac/uarfcn all 0, rscp pinned at the -120 floor).
     if (id.uarfcn == 0 && id.cid == 0 && id.psc == 0 && id.lac == 0) return null
-    val rawDbm = ss.dbm
-    val dbm = sanitizeDbm(rawDbm) ?: return null
+    val dbm = sanitizeDbm(ss.dbm) ?: return null
     val ecNo = ss.ecNo.takeIf { it != CellInfo.UNAVAILABLE }
-    // Some modems (seen on Tensor while camped on UMTS) pad the cell list with their whole
-    // configured neighbor set, unmeasured entries pinned at the reporting floor (RSCP -116,
-    // Ec/No -24). A neighbor at the Ec/No floor or below RSCP demod sensitivity was never
-    // actually received.
+    // Some modems (seen on Tensor while camped on UMTS) pad the cell list with dozens of
+    // unmeasured neighbor entries, stamped with a constant RSCP fill of -116 and Ec/No
+    // pinned at its -24 floor. An unregistered cell at the Ec/No floor carries no detected
+    // pilot, and one at or below the RSCP threshold is indistinguishable from that padding.
     if (!info.isRegistered && ((ecNo != null && ecNo <= WCDMA_ECNO_FLOOR_DB) || dbm <= WCDMA_NEIGHBOR_FLOOR_DBM)) {
       return null
     }
@@ -573,9 +573,7 @@ class CellularScanner(
   private fun parseGsm(info: CellInfoGsm): CellSignal? {
     val ss: CellSignalStrengthGsm = info.cellSignalStrength
     val id: CellIdentityGsm = info.cellIdentity
-    val rawDbm = ss.dbm
-    val dbm = sanitizeDbm(rawDbm) ?: return null
-    val exposureDbm = dbm
+    val dbm = sanitizeDbm(ss.dbm) ?: return null
     val ta = ss.timingAdvance
     val distance: Double? = if (ta in 1..219) Distance.fromGsmTimingAdvance(ta) else null
     val operator = operatorName(id)
@@ -600,7 +598,7 @@ class CellularScanner(
     return CellSignal(
       type = CellNetworkType.GSM_2G,
       dbm = dbm,
-      exposureDbm = exposureDbm,
+      exposureDbm = dbm,
       channelKey = id.arfcn.takeIf { it != Int.MAX_VALUE && it > 0 }?.let { "GSM-$it" },
       distanceMeters = distance,
       distanceConfidence = if (distance != null) DistanceConfidence.CALIBRATED else DistanceConfidence.NONE,
@@ -655,9 +653,12 @@ class CellularScanner(
 
     const val NR_SSRSRP_TO_RSSI_OFFSET_DB = 30
     const val WCDMA_RSCP_TO_RSSI_OFFSET_DB = 10
+
     // Bottom of the valid Ec/No reporting range [-24, 1].
     const val WCDMA_ECNO_FLOOR_DB = -24
-    // Typical UE RSCP demodulation sensitivity; anything at or below is unreceivable.
+
+    // Just above UMTS reference sensitivity (≈ -117 dBm): a neighbor this weak is unusable
+    // and indistinguishable from modem padding.
     const val WCDMA_NEIGHBOR_FLOOR_DBM = -115
     const val LTE_RSRP_FALLBACK_OFFSET_DB = 30
     const val LTE_RSSI_STALENESS_MS = 30_000L
