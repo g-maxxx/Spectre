@@ -1,0 +1,41 @@
+name: Debug APK link
+
+on:
+  workflow_run:
+    workflows: [Debug APK]
+    types: [completed]
+
+permissions:
+  actions: read
+  statuses: write
+
+jobs:
+  status:
+    runs-on: ubuntu-slim
+
+    steps:
+      - name: Set the download status
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            if (run.conclusion !== "success") return;
+            const { owner, repo } = context.repo;
+            const {
+              data: { artifacts: [apk] }
+            } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: run.id,
+              name: "spectre-debug.apk"
+            });
+            if (!apk) return;
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha: run.head_sha,
+              context: "Debug APK download",
+              state: "success",
+              description: "Built from this commit",
+              target_url: `${run.html_url}/artifacts/${apk.id}`
+            });
